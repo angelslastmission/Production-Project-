@@ -1,0 +1,198 @@
+/* ═══════════════════════════════════════════════
+   PetCare HMS — contact.css
+   All styles for contact.php page
+═══════════════════════════════════════════════ */
+
+/* ── Page wrapper ── */
+.contact-page {
+  padding-top: 80px;
+  background: #f8fafc;
+  min-height: 100vh;
+}
+
+/* ── Page header strip ── */
+.contact-page-header {
+  background: var(--white);
+  border-bottom: 1px solid var(--slate-200);
+  padding: 48px 0 36px;
+}
+
+.contact-breadcrumb .breadcrumb-item a {
+  color: var(--teal);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.contact-breadcrumb .breadcrumb-item.active {
+  color: var(--slate-500);
+  font-size: 0.85rem;
+}
+
+.contact-page-title {
+  font-family: var(--font-head);
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  font-weight: 800;
+  color: var(--slate-900);
+  margin-bottom: 10px;
+}
+
+.contact-page-sub {
+  color: var(--slate-500);
+  font-size: 0.97rem;
+  max-width: 520px;
+  margin: 0;
+}
+
+/* ── Body padding ── */
+.contact-body {
+  padding-top: 40px;
+  padding-bottom: 60px;
+}
+
+/* ── Alerts ── */
+.contact-alert-success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+
+.contact-alert-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+
+/* ── Form card ── */
+.contact-form-card {
+  background: var(--white);
+  border: 1px solid var(--slate-200);
+  border-radius: 16px;
+  padding: 36px 32px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+
+.contact-form-title {
+  font-family: var(--font-head);
+  font-weight: 700;
+  color: var(--slate-900);
+  font-size: 1.05rem;
+}
+
+/* ── Labels & inputs ── */
+.contact-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.contact-input {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  color: var(--slate-900);
+  background: var(--white);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.contact-input:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(13,148,136,0.12);
+  outline: none;
+}
+
+.contact-input::placeholder {
+  color: #9ca3af;
+}
+
+.contact-textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+/* ── Submit button ── */
+.btn-contact-submit {
+  background: var(--teal);
+  color: var(--white);
+  border: none;
+  border-radius: 50px;
+  padding: 12px 32px;
+  font-weight: 600;
+  font-size: 0.92rem;
+  transition: background 0.2s, transform 0.15s;
+}
+
+.btn-contact-submit:hover {
+  background: var(--teal-dark);
+  color: var(--white);
+  transform: translateY(-1px);
+}
+
+/* ── Info card ── */
+.contact-info-card {
+  background: var(--white);
+  border: 1px solid var(--slate-200);
+  border-radius: 16px;
+  padding: 28px 24px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+
+.contact-info-title {
+  font-family: var(--font-head);
+  font-weight: 700;
+  color: var(--slate-900);
+  font-size: 0.95rem;
+}
+
+.contact-info-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.contact-info-item:last-child { margin-bottom: 0; }
+
+.contact-info-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.contact-icon-phone    { background: #f0fdf4; color: #16a34a; }
+.contact-icon-email    { background: #eff6ff; color: #2563eb; }
+.contact-icon-location { background: #fff7ed; color: #ea580c; }
+
+.contact-info-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--slate-500);
+  margin-bottom: 2px;
+}
+
+.contact-info-val {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--slate-900);
+}
+
+/* ── Map card ── */
+.contact-map-card {
+  background: var(--white);
+  border: 1px solid var(--slate-200);
+  border-radius: 16px;
+  overflow: hidden;
+  min-height: 220px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
