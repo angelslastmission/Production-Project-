@@ -182,20 +182,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </form>
 
     <!-- Register Links -->
-    <div class="text-center mt-4">
-      <p style="color:#6b7280; font-size:0.9rem; margin-bottom:8px;">
-        Don't have an account?
-        <a href="register/owner_register.php" class="auth-link">
-          Register as pet owner
-        </a>
-      </p>
-      <p style="color:#6b7280; font-size:0.9rem; margin-bottom:0;">
-        Are you a vet?
-        <a href="register/vet_register.php" class="auth-link">
-          Apply here
-        </a>
-      </p>
-    </div>
+    <!-- Register Links — changes based on selected role -->
+<div class="text-center mt-4">
+
+  <!-- Shows when Owner tab is active -->
+  <p id="owner_register_link"
+     style="color:#6b7280; font-size:0.9rem; margin-bottom:0;
+            display:<?= $selected_role === 'owner' ? 'block' : 'none' ?>">
+    Don't have an account?
+    <a href="register/owner_register.php" class="auth-link">
+      Register as pet owner
+    </a>
+  </p>
+
+  <!-- Shows when Vet tab is active -->
+  <p id="vet_register_link"
+     style="color:#6b7280; font-size:0.9rem; margin-bottom:0;
+            display:<?= $selected_role === 'vet' ? 'block' : 'none' ?>">
+    Don't have an account?
+    <a href="register/vet_register.php" class="auth-link">
+      Register as veterinarian
+    </a>
+  </p>
+
+</div>
 
     <!-- Admin Note — matches wireframe -->
     <div class="auth-divider mt-3">
