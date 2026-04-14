@@ -1,0 +1,554 @@
+/* ═══════════════════════════════════
+   ADMIN PANEL — PetCare HMS
+═══════════════════════════════════ */
+
+* { box-sizing: border-box; }
+
+body {
+    font-family: 'DM Sans', sans-serif;
+    background: #f8fafc;
+    margin: 0;
+}
+
+/* ── Layout ── */
+.admin-wrapper {
+    display: flex;
+    min-height: 100vh;
+}
+
+.admin-main {
+    flex: 1;
+    margin-left: 240px;
+    padding: 32px;
+    background: #f8fafc;
+}
+
+/* ── Sidebar ── */
+.admin-sidebar {
+    width: 240px;
+    background: #ffffff;
+    border-right: 1px solid #e5e7eb;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 24px 0;
+    z-index: 100;
+}
+
+.sidebar-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 20px 24px;
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #134e4a;
+    font-family: 'Sora', sans-serif;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.sidebar-nav {
+    flex: 1;
+    padding: 16px 12px;
+    overflow-y: auto;
+}
+
+.sidebar-section-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #9ca3af;
+    letter-spacing: 1px;
+    padding: 12px 8px 4px;
+    margin: 0;
+}
+
+.sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    color: #4b5563;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-bottom: 2px;
+    transition: all 0.2s;
+}
+
+.sidebar-link:hover {
+    background: #f0fdf9;
+    color: #0d9488;
+}
+
+.sidebar-link.active {
+    background: #f0fdf9;
+    color: #0d9488;
+    font-weight: 700;
+}
+
+.sidebar-bottom {
+    padding: 16px 12px;
+    border-top: 1px solid #f3f4f6;
+}
+
+.sidebar-logout {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    color: #ef4444;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.sidebar-logout:hover {
+    background: #fef2f2;
+    color: #dc2626;
+}
+
+/* ── Topbar ── */
+.admin-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-page-title {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: #111827;
+    font-family: 'Sora', sans-serif;
+    margin: 0;
+}
+
+.admin-page-sub {
+    color: #6b7280;
+    font-size: 0.9rem;
+    margin: 4px 0 0;
+}
+
+.topbar-right {
+    margin-left: auto;
+}
+
+.topbar-user {
+    font-weight: 600;
+    color: #374151;
+    font-size: 0.9rem;
+}
+
+/* ── Alert ── */
+.admin-alert-warning {
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    color: #92400e;
+    padding: 12px 16px;
+    border-radius: 10px;
+    margin-bottom: 24px;
+    font-size: 0.9rem;
+}
+
+.admin-alert-warning a {
+    color: #0d9488;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+/* ── Stat Cards ── */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+}
+
+.stat-card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 24px;
+    border: 1px solid #e5e7eb;
+}
+
+.stat-card-warning {
+    border-color: #fcd34d;
+}
+
+.stat-number {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #111827;
+    font-family: 'Sora', sans-serif;
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    color: #6b7280;
+    margin-top: 4px;
+}
+
+.stat-sub {
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-top: 4px;
+}
+
+/* ── Cards ── */
+.admin-card {
+    background: #ffffff;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
+}
+
+.admin-card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.admin-card-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #111827;
+    margin: 0;
+    font-family: 'Sora', sans-serif;
+}
+
+/* ── Table ── */
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.admin-table th {
+    padding: 12px 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #6b7280;
+    letter-spacing: 0.5px;
+    text-align: left;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.admin-table td {
+    padding: 14px 20px;
+    font-size: 0.9rem;
+    color: #374151;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.admin-table tr:last-child td {
+    border-bottom: none;
+}
+
+.admin-table tr:hover td {
+    background: #f9fafb;
+}
+
+/* ── Badges ── */
+.badge-docs {
+    background: #dbeafe;
+    color: #1d4ed8;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.badge-sent {
+    background: #dcfce7;
+    color: #16a34a;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.badge-failed {
+    background: #fee2e2;
+    color: #dc2626;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.badge-pending {
+    background: #fef9c3;
+    color: #854d0e;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+/* ── Review Button ── */
+.btn-review {
+    background: #f3f4f6;
+    color: #374151;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    border: 1px solid #e5e7eb;
+    transition: all 0.2s;
+}
+
+.btn-review:hover {
+    background: #0d9488;
+    color: #ffffff;
+    border-color: #0d9488;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+    .admin-sidebar {
+        display: none;
+    }
+    .admin-main {
+        margin-left: 0;
+        padding: 16px;
+    }
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+/* ── Vet Registration Status Badges ── */
+.badge-pending-vet {
+    background: #fef9c3;
+    color: #854d0e;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.badge-approved-vet {
+    background: #dcfce7;
+    color: #16a34a;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.badge-rejected-vet {
+    background: #fee2e2;
+    color: #dc2626;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.btn-view-vet {
+    background: #f3f4f6;
+    color: #374151;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    border: 1px solid #e5e7eb;
+    transition: all 0.2s;
+}
+
+.btn-view-vet:hover {
+    background: #e5e7eb;
+    color: #111827;
+}
+
+/* ── Alert Success ── */
+.admin-alert-success {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    color: #16a34a;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+}
+
+/* ── Alert Error ── */
+.admin-alert-error {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #dc2626;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+}
+
+/* ── Review Panel ── */
+.review-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    padding: 24px;
+}
+
+.review-section-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 16px;
+    font-family: 'Sora', sans-serif;
+}
+
+.detail-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    font-size: 0.9rem;
+}
+
+.detail-label {
+    font-weight: 700;
+    color: #374151;
+    min-width: 80px;
+}
+
+.detail-value {
+    color: #6b7280;
+}
+
+/* ── Review Action Buttons ── */
+.review-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.btn-approve-vet {
+    background: #16a34a;
+    color: #ffffff;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-approve-vet:hover {
+    background: #15803d;
+}
+
+.btn-reject-vet {
+    background: #ffffff;
+    color: #dc2626;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    border: 2px solid #dc2626;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-reject-vet:hover {
+    background: #fee2e2;
+}
+
+.reject-textarea {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-family: 'DM Sans', sans-serif;
+    resize: vertical;
+}
+
+.reject-textarea:focus {
+    border-color: #dc2626;
+    outline: none;
+}
+
+.btn-reject-confirm {
+    background: #dc2626;
+    color: #ffffff;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    margin-right: 8px;
+}
+
+.btn-cancel {
+    background: #f3f4f6;
+    color: #374151;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border: 1px solid #e5e7eb;
+    cursor: pointer;
+}
+
+/* ── Document Box ── */
+.doc-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #f9fafb;
+}
+
+.doc-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.doc-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #111827;
+}
+
+.doc-filename {
+    font-size: 0.8rem;
+    color: #0d9488;
+}
+
+.btn-view-file {
+    background: #ffffff;
+    color: #374151;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    border: 1px solid #e5e7eb;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.btn-view-file:hover {
+    background: #0d9488;
+    color: #ffffff;
+    border-color: #0d9488;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+    .review-panel {
+        grid-template-columns: 1fr;
+    }
+}
