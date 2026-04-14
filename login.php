@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Sign In — PetCare HMS</title>
+  <title>Sign In — PetCura</title>
 
   <!-- Bootstrap 5 -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
@@ -109,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <!-- Logo -->
     <div class="text-center mb-4">
-      <div class="auth-logo mb-2">🐾 PetCare <span>HMS</span></div>
+      <div class="auth-logo mb-2">🐾 Pet<span>Cura</span></div>
       <p class="auth-subtitle">Sign in to your account</p>
     </div>
 
@@ -221,16 +221,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <script>
 // Role tab switcher
 function selectRole(role, element) {
-    // Update hidden input value
+    // Update hidden input
     document.getElementById('role_input').value = role;
 
-    // Remove active from all tabs
+    // Update tab styles
     document.querySelectorAll('.role-tab').forEach(function(tab) {
         tab.classList.remove('active');
     });
-
-    // Add active to clicked tab
     element.classList.add('active');
+
+    // Show/hide register links based on role
+    if (role === 'owner') {
+        document.getElementById('owner_register_link').style.display = 'block';
+        document.getElementById('vet_register_link').style.display   = 'none';
+    } else {
+        document.getElementById('owner_register_link').style.display = 'none';
+        document.getElementById('vet_register_link').style.display   = 'block';
+    }
 }
 </script>
 
