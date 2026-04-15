@@ -1,11 +1,44 @@
 <?php
 // ═══════════════════════════════════════════
-// FRONTEND ONLY — Reminder Logs
+// BACKEND — Reminder Logs
 // ═══════════════════════════════════════════
 session_start();
+include '../config.php';
 include 'includes/auth.php';
 
 $active_page = 'reminder_logs';
+
+$logs = mysqli_query($conn,
+    "SELECT r.reminder_type, r.channel, r.status, r.sent_at, r.created_at,
+            p.name AS pet_name,
+            CONCAT(o.first_name, ' ', o.last_name) AS owner_name,
+            CONCAT(v.first_name, ' ', v.last_name) AS vet_name
+     FROM reminders r
+     LEFT JOIN pets p ON r.pet_id = p.id
+     LEFT JOIN users o ON r.owner_id = o.id
+     LEFT JOIN users v ON r.vet_id = v.id
+     ORDER BY COALESCE(r.sent_at, r.created_at) DESC
+     LIMIT 100");
+
+function reminder_label($type) {
+    if ($type === 'vaccination') return 'Vaccination';
+    if ($type === 'deworming') return 'Deworming';
+    if ($type === 'followup') return 'Follow-up';
+    return ucfirst((string)$type);
+}
+
+function channel_label($channel) {
+    if ($channel === 'both') return 'SMS + Email';
+    if ($channel === 'sms') return 'SMS';
+    if ($channel === 'email') return 'Email';
+    return strtoupper((string)$channel);
+}
+
+function format_log_time($sent_at, $created_at) {
+    $time = $sent_at ?: $created_at;
+    if (!$time) return '-';
+    return date('M j, g:ia', strtotime($time));
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -55,51 +88,31 @@ $active_page = 'reminder_logs';
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td><strong>Bruno</strong></td>
-                            <td>Ram Sharma</td>
-                            <td>Dr. Sunita</td>
-                            <td>Rabies vaccine</td>
-                            <td>SMS + Email</td>
-                            <td><span class="badge-sent">Sent</span></td>
-                            <td>Apr 3, 9:00am</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Mimi</strong></td>
-                            <td>Sita Karki</td>
-                            <td>Dr. Sunita</td>
-                            <td>Deworming</td>
-                            <td>Email</td>
-                            <td><span class="badge-sent">Sent</span></td>
-                            <td>Apr 3, 9:01am</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Luna</strong></td>
-                            <td>Puja Tamang</td>
-                            <td>Dr. Sunita</td>
-                            <td>Follow-up</td>
-                            <td>SMS</td>
-                            <td><span class="badge-failed">Failed</span></td>
-                            <td>Apr 3, 9:01am</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Rocky</strong></td>
-                            <td>Hari Thapa</td>
-                            <td>Dr. Rajan</td>
-                            <td>DHPP vaccine</td>
-                            <td>Both</td>
-                            <td><span class="badge-sent">Sent</span></td>
-                            <td>Apr 2, 9:00am</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Tiger</strong></td>
-                            <td>Bikash KC</td>
-                            <td>Dr. Mina</td>
-                            <td>Deworming</td>
-                            <td>Email</td>
-                            <td><span class="badge-sent">Sent</span></td>
-                            <td>Apr 1, 9:00am</td>
-                        </tr>
+                        <?php if ($logs && mysqli_num_rows($logs) > 0): ?>
+                            <?php while ($row = mysqli_fetch_assoc($logs)): ?>
+                            <tr>
+                                <td><strong><?= htmlspecialchars($row['pet_name'] ?: 'Unknown pet') ?></strong></td>
+                                <td><?= htmlspecialchars($row['owner_name'] ?: 'Unknown owner') ?></td>
+                                <td><?= htmlspecialchars($row['vet_name'] ? 'Dr. ' . $row['vet_name'] : 'Not assigned') ?></td>
+                                <td><?= htmlspecialchars(reminder_label($row['reminder_type'])) ?></td>
+                                <td><?= htmlspecialchars(channel_label($row['channel'])) ?></td>
+                                <td>
+                                    <?php if ($row['status'] === 'sent'): ?>
+                                        <span class="badge-sent">Sent</span>
+                                    <?php elseif ($row['status'] === 'failed'): ?>
+                                        <span class="badge-failed">Failed</span>
+                                    <?php else: ?>
+                                        <span class="badge-pending">Pending</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td><?= htmlspecialchars(format_log_time($row['sent_at'], $row['created_at'])) ?></td>
+                            </tr>
+                            <?php endwhile; ?>
+                        <?php else: ?>
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">No reminder logs found</td>
+                            </tr>
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
