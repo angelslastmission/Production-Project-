@@ -1,11 +1,40 @@
 <?php
 // ═══════════════════════════════════════════
-// FRONTEND ONLY — Manage Vets
+// BACKEND — Manage Vets
 // ═══════════════════════════════════════════
 session_start();
+include '../config.php';
 include 'includes/auth.php';
 
 $active_page = 'manage_vets';
+$success = '';
+$error = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_status'])) {
+    $vet_id = (int)($_POST['vet_id'] ?? 0);
+    $new_status = (int)($_POST['new_status'] ?? 0);
+
+    $stmt = mysqli_prepare($conn,
+        "UPDATE users
+         SET is_active = ?
+         WHERE id = ? AND role = 'vet' AND status = 'approved'");
+    mysqli_stmt_bind_param($stmt, 'ii', $new_status, $vet_id);
+
+    if (mysqli_stmt_execute($stmt)) {
+        $success = $new_status === 1
+            ? 'Vet activated successfully.'
+            : 'Vet deactivated successfully.';
+    } else {
+        $error = 'Failed to update vet status.';
+    }
+}
+
+$vets = mysqli_query($conn,
+    "SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.clinic_name, u.is_active,
+            (SELECT COUNT(*) FROM pets p WHERE p.vet_id = u.id) AS pet_count
+     FROM users u
+     WHERE u.role = 'vet' AND u.status = 'approved'
+     ORDER BY u.created_at DESC");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -38,6 +67,20 @@ $active_page = 'manage_vets';
             </div>
         </div>
 
+        <?php if ($success): ?>
+        <div class="admin-alert-success mb-4">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            <?= htmlspecialchars($success) ?>
+        </div>
+        <?php endif; ?>
+
+        <?php if ($error): ?>
+        <div class="admin-alert-error mb-4">
+            <i class="bi bi-exclamation-circle-fill me-2"></i>
+            <?= htmlspecialchars($error) ?>
+        </div>
+        <?php endif; ?>
+
         <div class="admin-card">
             <div class="admin-card-header">
                 <h5 class="admin-card-title">All approved vets</h5>
@@ -56,46 +99,50 @@ $active_page = 'manage_vets';
                         </tr>
                     </thead>
                     <tbody>
+                        <?php if ($vets && mysqli_num_rows($vets) > 0): ?>
+                        <?php while ($vet = mysqli_fetch_assoc($vets)): ?>
                         <tr>
-                            <td><strong>Dr. Sunita Rai</strong></td>
-                            <td>sunita@care.com</td>
-                            <td>Animal Care</td>
-                            <td>9812345678</td>
-                            <td>24</td>
+                            <td><strong>Dr. <?= htmlspecialchars($vet['first_name']) ?> <?= htmlspecialchars($vet['last_name']) ?></strong></td>
+                            <td><?= htmlspecialchars($vet['email']) ?></td>
+                            <td><?= htmlspecialchars($vet['clinic_name'] ?: '-') ?></td>
+                            <td><?= htmlspecialchars($vet['phone'] ?: '-') ?></td>
+                            <td><?= (int)$vet['pet_count'] ?></td>
                             <td>
-                                <span class="badge-sent">Active</span>
+                                <?php if ((int)$vet['is_active'] === 1): ?>
+                                    <span class="badge-sent">Active</span>
+                                <?php else: ?>
+                                    <span class="badge-failed">Inactive</span>
+                                <?php endif; ?>
                             </td>
                             <td>
-                                <button type="button" class="btn-review">Edit</button>
+                                <form method="POST" class="d-inline">
+                                    <input type="hidden" name="vet_id" value="<?= (int)$vet['id'] ?>"/>
+                                    <?php if ((int)$vet['is_active'] === 1): ?>
+                                        <input type="hidden" name="new_status" value="0"/>
+                                        <button type="submit"
+                                                name="toggle_status"
+                                                class="btn-review"
+                                                onclick="return confirm('Do you want to deactivate this vet account?')">
+                                            Edit
+                                        </button>
+                                    <?php else: ?>
+                                        <input type="hidden" name="new_status" value="1"/>
+                                        <button type="submit"
+                                                name="toggle_status"
+                                                class="btn-review"
+                                                onclick="return confirm('Do you want to activate this vet account?')">
+                                            Edit
+                                        </button>
+                                    <?php endif; ?>
+                                </form>
                             </td>
                         </tr>
+                        <?php endwhile; ?>
+                        <?php else: ?>
                         <tr>
-                            <td><strong>Dr. Rajan Thapa</strong></td>
-                            <td>rajan@pet.com</td>
-                            <td>PetWell</td>
-                            <td>9845678901</td>
-                            <td>18</td>
-                            <td><span class="badge-sent">Active</span></td>
-                            <td><button type="button" class="btn-review">Edit</button></td>
+                            <td colspan="7" class="text-center text-muted py-4">No approved vets found</td>
                         </tr>
-                        <tr>
-                            <td><strong>Dr. Mina Gurung</strong></td>
-                            <td>mina@care.com</td>
-                            <td>Happy Paws</td>
-                            <td>9856789012</td>
-                            <td>31</td>
-                            <td><span class="badge-sent">Active</span></td>
-                            <td><button type="button" class="btn-review">Edit</button></td>
-                        </tr>
-                        <tr>
-                            <td><strong>Dr. Bikash KC</strong></td>
-                            <td>bikash@vet.com</td>
-                            <td>City Vet</td>
-                            <td>9834567890</td>
-                            <td>12</td>
-                            <td><span class="badge-failed">Inactive</span></td>
-                            <td><button type="button" class="btn-review">Edit</button></td>
-                        </tr>
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
