@@ -94,12 +94,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
 
 <div class="auth-wrapper">
-  <div class="auth-card" style="max-width:560px;">
+  <div class="auth-card auth-card-wide">
 
     <!-- Logo -->
     <div class="text-center mb-4">
       <div class="auth-logo mb-2">🐾 PetCura</div>
-      <h5 style="font-family:'Sora',sans-serif; font-weight:700; color:#111827;">
+      <h5 class="auth-title">
         Create owner account
       </h5>
       <p class="auth-subtitle">
@@ -114,8 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <?= htmlspecialchars($success) ?>
     </div>
     <div class="text-center mt-3">
-      <a href="../login.php" class="auth-btn d-inline-block"
-         style="text-decoration:none; padding:12px 32px; width:auto;">
+      <a href="../login.php" class="auth-btn auth-btn-inline d-inline-block">
         Sign in now
       </a>
     </div>
@@ -140,7 +139,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <input type="text"
                  name="first_name"
                  class="auth-input"
-                 placeholder="Ram"
                  value="<?= htmlspecialchars($_POST['first_name'] ?? '') ?>"
                  required/>
         </div>
@@ -149,7 +147,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <input type="text"
                  name="last_name"
                  class="auth-input"
-                 placeholder="Sharma"
                  value="<?= htmlspecialchars($_POST['last_name'] ?? '') ?>"
                  required/>
         </div>
@@ -161,7 +158,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <input type="email"
                name="email"
                class="auth-input"
-               placeholder="ram@gmail.com"
                value="<?= htmlspecialchars($_POST['email'] ?? '') ?>"
                required/>
       </div>
@@ -173,7 +169,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <input type="text"
                  name="phone"
                  class="auth-input"
-                 placeholder="98XXXXXXXXX"
                  value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>"
                  required/>
         </div>
@@ -182,7 +177,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <input type="text"
                  name="address"
                  class="auth-input"
-                 placeholder="Kathmandu"
                  value="<?= htmlspecialchars($_POST['address'] ?? '') ?>"
                  required/>
         </div>
@@ -192,19 +186,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="row g-3 mb-4">
         <div class="col-6">
           <label class="auth-label">Password</label>
-          <input type="password"
-                 name="password"
-                 class="auth-input"
-                 placeholder="••••••••"
-                 required/>
+          <div class="input-group">
+            <input type="password"
+                   name="password"
+                   id="password"
+                   class="auth-input password-input"
+                   required/>
+            <button type="button"
+                    class="btn auth-toggle-btn"
+                    data-target="password"
+                    aria-label="Show password">
+              <i class="bi bi-eye"></i>
+            </button>
+          </div>
         </div>
         <div class="col-6">
           <label class="auth-label">Confirm password</label>
-          <input type="password"
-                 name="confirm_password"
-                 class="auth-input"
-                 placeholder="••••••••"
-                 required/>
+          <div class="input-group">
+            <input type="password"
+                   name="confirm_password"
+                   id="confirm_password"
+                   class="auth-input password-input"
+                   required/>
+            <button type="button"
+                    class="btn auth-toggle-btn"
+                    data-target="confirm_password"
+                    aria-label="Show confirm password">
+              <i class="bi bi-eye"></i>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -230,7 +240,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <!-- Sign in link -->
     <div class="text-center mt-4">
-      <a href="../login.php" class="auth-link" style="font-size:0.9rem;">
+      <a href="../login.php" class="auth-link auth-link-small">
         Already have an account? Sign in here
       </a>
     </div>
@@ -240,6 +250,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.querySelectorAll('.auth-toggle-btn').forEach(function(button) {
+  button.addEventListener('click', function() {
+    var input = document.getElementById(this.dataset.target);
+    var icon = this.querySelector('i');
+
+    if (input.type === 'password') {
+      input.type = 'text';
+      icon.classList.remove('bi-eye');
+      icon.classList.add('bi-eye-slash');
+    } else {
+      input.type = 'password';
+      icon.classList.remove('bi-eye-slash');
+      icon.classList.add('bi-eye');
+    }
+  });
+});
+</script>
 
 </body>
 </html>
