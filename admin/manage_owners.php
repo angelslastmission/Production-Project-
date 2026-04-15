@@ -1,12 +1,21 @@
 <?php
 // ═══════════════════════════════════════════
-// FRONTEND ONLY — Manage Owners
+// BACKEND — Manage Owners
 // ═══════════════════════════════════════════
 session_start();
 include '../config.php';
 include 'includes/auth.php';
 
 $active_page = 'manage_owners';
+
+$owners = mysqli_query($conn,
+    "SELECT o.id, o.first_name, o.last_name, o.email, o.phone, o.created_at,
+            v.first_name AS vet_first_name, v.last_name AS vet_last_name,
+            (SELECT COUNT(*) FROM pets p WHERE p.owner_id = o.id) AS pet_count
+     FROM users o
+     LEFT JOIN users v ON o.vet_id = v.id AND v.role = 'vet'
+     WHERE o.role = 'owner'
+     ORDER BY o.created_at DESC");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -56,51 +65,39 @@ $active_page = 'manage_owners';
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td><strong>Ram Sharma</strong></td>
-                            <td>ram@gmail.com</td>
-                            <td>9812345678</td>
-                            <td>Dr. Sunita Rai</td>
-                            <td>2</td>
-                            <td>Jan 2025</td>
-                            <td><button class="btn-review" type="button">View</button></td>
-                        </tr>
-                        <tr>
-                            <td><strong>Sita Karki</strong></td>
-                            <td>sita@gmail.com</td>
-                            <td>9845678901</td>
-                            <td>Dr. Sunita Rai</td>
-                            <td>1</td>
-                            <td>Feb 2025</td>
-                            <td><button class="btn-review" type="button">View</button></td>
-                        </tr>
-                        <tr>
-                            <td><strong>Hari Thapa</strong></td>
-                            <td>hari@email.com</td>
-                            <td>9856789012</td>
-                            <td>Dr. Rajan Thapa</td>
-                            <td>1</td>
-                            <td>Mar 2025</td>
-                            <td><button class="btn-review" type="button">View</button></td>
-                        </tr>
-                        <tr>
-                            <td><strong>Puja Tamang</strong></td>
-                            <td>puja@gmail.com</td>
-                            <td>9834567890</td>
-                            <td>Dr. Sunita Rai</td>
-                            <td>3</td>
-                            <td>Jun 2025</td>
-                            <td><button class="btn-review" type="button">View</button></td>
-                        </tr>
-                        <tr>
-                            <td><strong>Bikash Shrestha</strong></td>
-                            <td>bikash@gmail.com</td>
-                            <td>9823456789</td>
-                            <td>Dr. Mina Gurung</td>
-                            <td>2</td>
-                            <td>Aug 2025</td>
-                            <td><button class="btn-review" type="button">View</button></td>
-                        </tr>
+                        <?php if ($owners && mysqli_num_rows($owners) > 0): ?>
+                            <?php while ($owner = mysqli_fetch_assoc($owners)): ?>
+                            <tr>
+                                <td>
+                                    <strong>
+                                        <?= htmlspecialchars($owner['first_name']) ?>
+                                        <?= htmlspecialchars($owner['last_name']) ?>
+                                    </strong>
+                                </td>
+                                <td><?= htmlspecialchars($owner['email']) ?></td>
+                                <td><?= htmlspecialchars($owner['phone'] ?: '-') ?></td>
+                                <td>
+                                    <?php if (!empty($owner['vet_first_name'])): ?>
+                                        Dr. <?= htmlspecialchars($owner['vet_first_name']) ?>
+                                        <?= htmlspecialchars($owner['vet_last_name']) ?>
+                                    <?php else: ?>
+                                        Not assigned
+                                    <?php endif; ?>
+                                </td>
+                                <td><?= (int)$owner['pet_count'] ?></td>
+                                <td><?= date('M Y', strtotime($owner['created_at'])) ?></td>
+                                <td>
+                                    <button class="btn-review" type="button">View</button>
+                                </td>
+                            </tr>
+                            <?php endwhile; ?>
+                        <?php else: ?>
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">
+                                    No owners found
+                                </td>
+                            </tr>
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
