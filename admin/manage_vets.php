@@ -115,28 +115,76 @@ $vets = mysqli_query($conn,
                                 <?php endif; ?>
                             </td>
                             <td>
-                                <form method="POST" class="d-inline">
-                                    <input type="hidden" name="vet_id" value="<?= (int)$vet['id'] ?>"/>
-                                    <?php if ((int)$vet['is_active'] === 1): ?>
-                                        <input type="hidden" name="new_status" value="0"/>
-                                        <button type="submit"
-                                                name="toggle_status"
-                                                class="btn-review"
-                                                onclick="return confirm('Do you want to deactivate this vet account?')">
-                                            Edit
-                                        </button>
-                                    <?php else: ?>
-                                        <input type="hidden" name="new_status" value="1"/>
-                                        <button type="submit"
-                                                name="toggle_status"
-                                                class="btn-review"
-                                                onclick="return confirm('Do you want to activate this vet account?')">
-                                            Edit
-                                        </button>
-                                    <?php endif; ?>
-                                </form>
+                                <button type="button"
+                                        class="btn-review"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#vetActionModal<?= (int)$vet['id'] ?>">
+                                    Edit
+                                </button>
                             </td>
                         </tr>
+
+                        <!-- Action Modal -->
+                        <div class="modal fade"
+                             id="vetActionModal<?= (int)$vet['id'] ?>"
+                             tabindex="-1"
+                             aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">
+                                            Edit vet status
+                                        </h5>
+                                        <button type="button"
+                                                class="btn-close"
+                                                data-bs-dismiss="modal"
+                                                aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <p class="mb-2">
+                                            <strong>Dr. <?= htmlspecialchars($vet['first_name']) ?> <?= htmlspecialchars($vet['last_name']) ?></strong>
+                                        </p>
+                                        <p class="text-muted mb-0">
+                                            Current status:
+                                            <?php if ((int)$vet['is_active'] === 1): ?>
+                                                <span class="badge-sent">Active</span>
+                                            <?php else: ?>
+                                                <span class="badge-failed">Inactive</span>
+                                            <?php endif; ?>
+                                        </p>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button"
+                                                class="btn btn-light"
+                                                data-bs-dismiss="modal">
+                                            Cancel
+                                        </button>
+
+                                        <?php if ((int)$vet['is_active'] === 1): ?>
+                                        <form method="POST" class="d-inline">
+                                            <input type="hidden" name="vet_id" value="<?= (int)$vet['id'] ?>"/>
+                                            <input type="hidden" name="new_status" value="0"/>
+                                            <button type="submit"
+                                                    name="toggle_status"
+                                                    class="btn btn-danger">
+                                                Deactivate
+                                            </button>
+                                        </form>
+                                        <?php else: ?>
+                                        <form method="POST" class="d-inline">
+                                            <input type="hidden" name="vet_id" value="<?= (int)$vet['id'] ?>"/>
+                                            <input type="hidden" name="new_status" value="1"/>
+                                            <button type="submit"
+                                                    name="toggle_status"
+                                                    class="btn btn-success">
+                                                Activate
+                                            </button>
+                                        </form>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <?php endwhile; ?>
                         <?php else: ?>
                         <tr>
