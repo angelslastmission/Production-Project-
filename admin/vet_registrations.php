@@ -350,11 +350,11 @@ if (isset($_GET['id'])) {
                             </div>
                         </div>
                         <?php if ($review_vet['license_doc']): ?>
-                        <a href="../uploads/licenses/<?= htmlspecialchars($review_vet['license_doc']) ?>"
-                           target="_blank"
-                           class="btn-view-file">
-                            View file
-                        </a>
+                        <a href="<?= 'http://localhost:8081/Production-Project-/uploads/license/' . htmlspecialchars($review_vet['license_doc']) ?>"
+   target="_blank"
+   class="btn-view-file">
+    <i class="bi bi-eye me-1"></i>View file
+</a>
                         <?php endif; ?>
                     </div>
 
@@ -371,11 +371,12 @@ if (isset($_GET['id'])) {
                             </div>
                         </div>
                         <?php if ($review_vet['citizenship_doc']): ?>
-                        <a href="../uploads/citizenships/<?= htmlspecialchars($review_vet['citizenship_doc']) ?>"
-                           target="_blank"
-                           class="btn-view-file">
-                            View file
-                        </a>
+                        
+<a href="<?= 'http://localhost:8081/Production-Project-/uploads/citizenship/' . htmlspecialchars($review_vet['citizenship_doc']) ?>"
+   target="_blank"
+   class="btn-view-file">
+    <i class="bi bi-eye me-1"></i>View file
+</a>
                         <?php endif; ?>
                     </div>
 
