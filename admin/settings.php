@@ -52,7 +52,7 @@ $active_page = 'settings';
             </div>
         </div>
 
-        <div class="row g-4 settings-grid">
+        <div class="row g-3 settings-grid">
 
             <div class="col-lg-6">
                 <div class="admin-card h-100 settings-card">
@@ -61,16 +61,16 @@ $active_page = 'settings';
                             <i class="bi bi-person-vcard-fill me-2"></i>Admin profile
                         </h5>
                     </div>
-                    <div class="p-4 settings-body">
-                        <div class="mb-3 settings-field">
+                    <div class="p-3 settings-body">
+                        <div class="settings-field">
                             <label class="form-label settings-label">Full name</label>
                             <input type="text" class="form-control settings-input" value="<?= htmlspecialchars($_SESSION['user_name']) ?>" readonly>
                         </div>
-                        <div class="mb-3 settings-field">
+                        <div class="settings-field">
                             <label class="form-label settings-label">Role</label>
                             <input type="text" class="form-control settings-input" value="Administrator" readonly>
                         </div>
-                        <div class="mb-0 settings-field">
+                        <div class="settings-field">
                             <label class="form-label settings-label">Email</label>
                             <input type="email" class="form-control settings-input" value="admin@petcare.com" readonly>
                         </div>
@@ -85,8 +85,8 @@ $active_page = 'settings';
                             <i class="bi bi-bell-fill me-2"></i>Reminder preferences
                         </h5>
                     </div>
-                    <div class="p-4 settings-body">
-                        <div class="settings-switch-row mb-3">
+                    <div class="p-3 settings-body">
+                        <div class="settings-switch-row settings-row-gap">
                             <div>
                                 <p class="settings-switch-title mb-0">Enable email reminders</p>
                                 <small class="text-muted">Use SMTP mail delivery</small>
@@ -95,7 +95,7 @@ $active_page = 'settings';
                                 <input class="form-check-input" type="checkbox" id="email_reminders" checked>
                             </div>
                         </div>
-                        <div class="settings-switch-row mb-3">
+                        <div class="settings-switch-row settings-row-gap">
                             <div>
                                 <p class="settings-switch-title mb-0">Enable SMS reminders</p>
                                 <small class="text-muted">Use SMS provider integration</small>
@@ -104,7 +104,7 @@ $active_page = 'settings';
                                 <input class="form-check-input" type="checkbox" id="sms_reminders" checked>
                             </div>
                         </div>
-                        <div class="settings-switch-row mb-4">
+                        <div class="settings-switch-row settings-row-gap">
                             <div>
                                 <p class="settings-switch-title mb-0">Enable auto reminder scheduler</p>
                                 <small class="text-muted">Runs every morning at 9:00 AM</small>
@@ -125,18 +125,33 @@ $active_page = 'settings';
                             <i class="bi bi-key-fill me-2"></i>Change password
                         </h5>
                     </div>
-                    <div class="p-4 settings-body">
-                        <div class="mb-3 settings-field">
+                    <div class="p-3 settings-body">
+                        <div class="settings-field">
                             <label class="form-label settings-label">Current password</label>
-                            <input type="password" class="form-control settings-input" placeholder="Current password">
+                            <div class="input-group settings-password-group">
+                                <input type="password" id="current_password" class="form-control settings-input" placeholder="Current password">
+                                <button type="button" class="btn settings-password-toggle" data-target="current_password" aria-label="Toggle current password visibility">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
                         </div>
-                        <div class="mb-3 settings-field">
+                        <div class="settings-field">
                             <label class="form-label settings-label">New password</label>
-                            <input type="password" class="form-control settings-input" placeholder="New password">
+                            <div class="input-group settings-password-group">
+                                <input type="password" id="new_password" class="form-control settings-input" placeholder="New password">
+                                <button type="button" class="btn settings-password-toggle" data-target="new_password" aria-label="Toggle new password visibility">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
                         </div>
-                        <div class="mb-4 settings-field">
+                        <div class="settings-field settings-field-compact">
                             <label class="form-label settings-label">Confirm new password</label>
-                            <input type="password" class="form-control settings-input" placeholder="Confirm new password">
+                            <div class="input-group settings-password-group">
+                                <input type="password" id="confirm_password" class="form-control settings-input" placeholder="Confirm new password">
+                                <button type="button" class="btn settings-password-toggle" data-target="confirm_password" aria-label="Toggle confirm password visibility">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
                         </div>
                         <button type="button" class="btn btn-dark w-100 settings-btn">Update password</button>
                     </div>
@@ -157,5 +172,23 @@ $active_page = 'settings';
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.querySelectorAll('.settings-password-toggle').forEach(function(button) {
+    button.addEventListener('click', function() {
+        var input = document.getElementById(this.dataset.target);
+        var icon = this.querySelector('i');
+
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.remove('bi-eye');
+            icon.classList.add('bi-eye-slash');
+        } else {
+            input.type = 'password';
+            icon.classList.remove('bi-eye-slash');
+            icon.classList.add('bi-eye');
+        }
+    });
+});
+</script>
 </body>
 </html>
