@@ -546,9 +546,127 @@ body {
     border-color: #0d9488;
 }
 
+/* ── Settings Page ── */
+.settings-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 18px 20px;
+    border: 1px solid #dbe7e4;
+    border-radius: 12px;
+    background: linear-gradient(120deg, #f3faf8 0%, #ffffff 70%);
+}
+
+.settings-kicker {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #0d9488;
+}
+
+.settings-hero-title {
+    font-family: 'Sora', sans-serif;
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: #111827;
+}
+
+.settings-hero-sub {
+    color: #6b7280;
+    font-size: 0.9rem;
+}
+
+.settings-hero-badge {
+    background: #ecfdf5;
+    border: 1px solid #bbf7d0;
+    color: #166534;
+    font-size: 0.82rem;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 8px 12px;
+}
+
+.settings-card {
+    border-color: #e6ecea;
+}
+
+.settings-header {
+    background: #fbfdfc;
+}
+
+.settings-title {
+    display: flex;
+    align-items: center;
+}
+
+.settings-body {
+    background: #ffffff;
+}
+
+.settings-label {
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: #4b5563;
+}
+
+.settings-input {
+    border: 1px solid #dce4e1;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 0.92rem;
+}
+
+.settings-input:focus {
+    border-color: #0d9488;
+    box-shadow: 0 0 0 0.18rem rgba(13, 148, 136, 0.15);
+}
+
+.settings-switch-row {
+    border: 1px solid #e7ecea;
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.settings-switch-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #1f2937;
+}
+
+.settings-switch-row .form-check-input {
+    width: 2.3em;
+    height: 1.2em;
+    cursor: pointer;
+}
+
+.settings-btn {
+    font-weight: 700;
+    border-radius: 10px;
+}
+
+.settings-note {
+    display: flex;
+    align-items: center;
+}
+
 /* ── Responsive ── */
 @media (max-width: 768px) {
     .review-panel {
         grid-template-columns: 1fr;
     }
+
+    .settings-hero {
+        padding: 14px;
+    }
+
+    .settings-hero-title {
+        font-size: 1.2rem;
+    }
 }
+
