@@ -5,6 +5,133 @@ include 'includes/auth.php';
 
 $active_page = 'dashboard';
 include 'includes/dashboard_backend.php';
+
+$today = date('Y-m-d');
+
+$due_this_week_stmt = mysqli_prepare(
+    $conn,
+    "SELECT COUNT(*) AS total_due
+     FROM (
+        SELECT next_due_date AS due_date
+        FROM vaccinations
+        WHERE vet_id = ? AND next_due_date IS NOT NULL
+
+        UNION ALL
+
+        SELECT next_due_date AS due_date
+        FROM dewormings
+        WHERE vet_id = ? AND next_due_date IS NOT NULL
+     ) x
+     WHERE x.due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)"
+);
+
+$due_this_week = 0;
+if ($due_this_week_stmt) {
+    mysqli_stmt_bind_param($due_this_week_stmt, 'ii', $vet_id, $vet_id);
+    mysqli_stmt_execute($due_this_week_stmt);
+    $due_this_week_result = mysqli_stmt_get_result($due_this_week_stmt);
+    $due_this_week_row = $due_this_week_result ? mysqli_fetch_assoc($due_this_week_result) : null;
+    $due_this_week = (int)($due_this_week_row['total_due'] ?? 0);
+    mysqli_stmt_close($due_this_week_stmt);
+}
+
+$overdue_stmt = mysqli_prepare(
+    $conn,
+    "SELECT COUNT(*) AS total_overdue
+     FROM (
+        SELECT next_due_date AS due_date
+        FROM vaccinations
+        WHERE vet_id = ? AND next_due_date IS NOT NULL
+
+        UNION ALL
+
+        SELECT next_due_date AS due_date
+        FROM dewormings
+        WHERE vet_id = ? AND next_due_date IS NOT NULL
+     ) x
+     WHERE x.due_date < CURDATE()"
+);
+
+$overdue_count = 0;
+if ($overdue_stmt) {
+    mysqli_stmt_bind_param($overdue_stmt, 'ii', $vet_id, $vet_id);
+    mysqli_stmt_execute($overdue_stmt);
+    $overdue_result = mysqli_stmt_get_result($overdue_stmt);
+    $overdue_row = $overdue_result ? mysqli_fetch_assoc($overdue_result) : null;
+    $overdue_count = (int)($overdue_row['total_overdue'] ?? 0);
+    mysqli_stmt_close($overdue_stmt);
+}
+
+$followup_stmt = mysqli_prepare(
+    $conn,
+    "SELECT COUNT(*) AS total_followups
+     FROM treatments
+     WHERE vet_id = ? AND followup_date IS NOT NULL AND followup_date >= CURDATE()"
+);
+
+$followups_pending = 0;
+if ($followup_stmt) {
+    mysqli_stmt_bind_param($followup_stmt, 'i', $vet_id);
+    mysqli_stmt_execute($followup_stmt);
+    $followup_result = mysqli_stmt_get_result($followup_stmt);
+    $followup_row = $followup_result ? mysqli_fetch_assoc($followup_result) : null;
+    $followups_pending = (int)($followup_row['total_followups'] ?? 0);
+    mysqli_stmt_close($followup_stmt);
+}
+
+$vaccinations_panel = [];
+$vaccinations_panel_stmt = mysqli_prepare(
+    $conn,
+    "SELECT pet_name, treatment_name, due_date
+     FROM (
+        SELECT p.name AS pet_name, v.vaccine_name AS treatment_name, v.next_due_date AS due_date
+        FROM vaccinations v
+        JOIN pets p ON p.id = v.pet_id
+        WHERE v.vet_id = ? AND v.next_due_date IS NOT NULL
+
+        UNION ALL
+
+        SELECT p.name AS pet_name, d.product_name AS treatment_name, d.next_due_date AS due_date
+        FROM dewormings d
+        JOIN pets p ON p.id = d.pet_id
+        WHERE d.vet_id = ? AND d.next_due_date IS NOT NULL
+     ) x
+     ORDER BY due_date ASC
+     LIMIT 6"
+);
+
+if ($vaccinations_panel_stmt) {
+    mysqli_stmt_bind_param($vaccinations_panel_stmt, 'ii', $vet_id, $vet_id);
+    mysqli_stmt_execute($vaccinations_panel_stmt);
+    $vaccinations_panel_result = mysqli_stmt_get_result($vaccinations_panel_stmt);
+    while ($vaccinations_panel_result && $row = mysqli_fetch_assoc($vaccinations_panel_result)) {
+        $vaccinations_panel[] = $row;
+    }
+    mysqli_stmt_close($vaccinations_panel_stmt);
+}
+
+$followups_panel = [];
+$followups_panel_stmt = mysqli_prepare(
+    $conn,
+    "SELECT p.name AS pet_name,
+            COALESCE(NULLIF(TRIM(t.diagnosis), ''), 'Post-treatment check') AS case_name,
+            t.followup_date
+     FROM treatments t
+     JOIN pets p ON p.id = t.pet_id
+     WHERE t.vet_id = ? AND t.followup_date IS NOT NULL
+     ORDER BY t.followup_date ASC
+     LIMIT 6"
+);
+
+if ($followups_panel_stmt) {
+    mysqli_stmt_bind_param($followups_panel_stmt, 'i', $vet_id);
+    mysqli_stmt_execute($followups_panel_stmt);
+    $followups_panel_result = mysqli_stmt_get_result($followups_panel_stmt);
+    while ($followups_panel_result && $row = mysqli_fetch_assoc($followups_panel_result)) {
+        $followups_panel[] = $row;
+    }
+    mysqli_stmt_close($followups_panel_stmt);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -15,367 +142,167 @@ include 'includes/dashboard_backend.php';
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"/>
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-  <link href="../assets/css/admin.css" rel="stylesheet"/>
+  <link href="../assets/css/vet.css" rel="stylesheet"/>
 </head>
 <body>
-<div class="admin-wrapper">
+<div class="vet-layout">
     <?php include 'includes/sidebar.php'; ?>
 
-    <div class="admin-main">
-        <div class="admin-topbar">
-            <div>
-                <h1 class="admin-page-title">Vet dashboard</h1>
-                <p class="admin-page-sub">Manage pets and health records</p>
-            </div>
-            <div class="topbar-right">
-                <span class="topbar-user">
-                    <i class="bi bi-person-circle me-2"></i>
-                    <?= htmlspecialchars($_SESSION['user_name']) ?>
-                </span>
-            </div>
+    <main class="vet-main">
+        <div class="vet-search-row">
+            <input type="text" class="vet-search" placeholder="Search patients or records..."/>
         </div>
 
+        <section class="vet-greeting">
+            <h1>Good morning, <?= htmlspecialchars($_SESSION['user_name']) ?></h1>
+            <p><?= htmlspecialchars(date('l, j F Y')) ?> | <?= htmlspecialchars($_SESSION['clinic_name'] ?? 'Animal Care Clinic') ?></p>
+        </section>
+
         <?php if ($success_message !== ''): ?>
-            <div class="admin-alert-success mb-3">
-                <i class="bi bi-check-circle-fill me-2"></i>
-                <?= htmlspecialchars($success_message) ?>
-            </div>
+            <div class="alert alert-success py-2 mb-2"><?= htmlspecialchars($success_message) ?></div>
         <?php endif; ?>
 
         <?php if ($error_message !== ''): ?>
-            <div class="admin-alert-error mb-3">
-                <i class="bi bi-x-circle-fill me-2"></i>
-                <?= htmlspecialchars($error_message) ?>
-            </div>
+            <div class="alert alert-danger py-2 mb-2"><?= htmlspecialchars($error_message) ?></div>
         <?php endif; ?>
 
-        <div class="stats-grid mb-4">
-            <div class="stat-card">
-                <p class="stat-label">My Pets</p>
-                <h3 class="stat-value"><?= (int)$stats['pets'] ?></h3>
+        <section class="vet-alert">
+            <div class="vet-alert-text">
+                <i class="bi bi-exclamation-triangle"></i>
+                <span>! <?= (int)$overdue_count ?> vaccinations are overdue - send reminders to owners now.</span>
             </div>
-            <div class="stat-card">
-                <p class="stat-label">Vaccinations</p>
-                <h3 class="stat-value"><?= (int)$stats['vaccinations'] ?></h3>
+            <div>
+                <button type="button" class="vet-alert-btn">SEND ALL</button>
             </div>
-            <div class="stat-card">
-                <p class="stat-label">Dewormings</p>
-                <h3 class="stat-value"><?= (int)$stats['dewormings'] ?></h3>
-            </div>
-            <div class="stat-card">
-                <p class="stat-label">Treatments</p>
-                <h3 class="stat-value"><?= (int)$stats['treatments'] ?></h3>
-            </div>
-        </div>
+        </section>
 
-        <div class="row g-3 mb-4">
-            <div class="col-lg-6">
-                <div class="admin-card h-100">
-                    <div class="admin-card-header">
-                        <h5 class="admin-card-title"><i class="bi bi-plus-square-fill me-2"></i>Add pet</h5>
-                    </div>
-                    <div class="p-3">
-                        <form method="post" class="row g-2">
-                            <input type="hidden" name="action" value="add_pet"/>
-                            <div class="col-md-6">
-                                <label class="form-label">Pet name *</label>
-                                <input type="text" name="name" class="form-control" required/>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Owner email (optional)</label>
-                                <input type="email" name="owner_email" class="form-control" placeholder="owner@email.com"/>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Species</label>
-                                <input type="text" name="species" class="form-control"/>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Breed</label>
-                                <input type="text" name="breed" class="form-control"/>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Gender</label>
-                                <select name="gender" class="form-select">
-                                    <option value="">Select</option>
-                                    <option value="male">Male</option>
-                                    <option value="female">Female</option>
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">DOB</label>
-                                <input type="date" name="dob" class="form-control"/>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Weight (kg)</label>
-                                <input type="number" step="0.01" min="0" name="weight" class="form-control"/>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Blood group</label>
-                                <input type="text" name="blood_group" class="form-control"/>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Microchip number</label>
-                                <input type="text" name="microchip_number" class="form-control"/>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Health status</label>
-                                <select name="status" class="form-select">
-                                    <option value="healthy">Healthy</option>
-                                    <option value="sick">Sick</option>
-                                    <option value="treatment">Treatment</option>
-                                    <option value="recovering">Recovering</option>
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Last visit</label>
-                                <input type="date" name="last_visit" class="form-control"/>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label">Allergies</label>
-                                <textarea name="allergies" class="form-control" rows="2"></textarea>
-                            </div>
-                            <div class="col-12 form-check mt-1 ms-1">
-                                <input class="form-check-input" type="checkbox" id="is_neutered" name="is_neutered">
-                                <label class="form-check-label" for="is_neutered">Neutered</label>
-                            </div>
-                            <div class="col-12">
-                                <button class="btn btn-dark w-100" type="submit">Save pet</button>
-                            </div>
-                        </form>
-                    </div>
+        <section class="vet-stats">
+            <article class="vet-stat-card">
+                <div class="vet-stat-icon"><i class="bi bi-person-lines-fill"></i></div>
+                <div class="vet-stat-number"><?= (int)$stats['pets'] ?></div>
+                <div class="vet-stat-label">Total patients</div>
+            </article>
+            <article class="vet-stat-card">
+                <div class="vet-stat-icon"><i class="bi bi-calendar3"></i></div>
+                <div class="vet-stat-number"><?= (int)$due_this_week ?></div>
+                <div class="vet-stat-label">Due this week (Action needed)</div>
+            </article>
+            <article class="vet-stat-card">
+                <div class="vet-stat-icon"><i class="bi bi-exclamation-lg"></i></div>
+                <div class="vet-stat-number"><?= (int)$overdue_count ?></div>
+                <div class="vet-stat-label">Overdue vaccines (Urgent)</div>
+            </article>
+            <article class="vet-stat-card">
+                <div class="vet-stat-icon"><i class="bi bi-arrow-counterclockwise"></i></div>
+                <div class="vet-stat-number"><?= (int)$followups_pending ?></div>
+                <div class="vet-stat-label">Follow-ups pending (Review)</div>
+            </article>
+        </section>
+
+        <section class="vet-data-grid">
+            <article class="vet-panel">
+                <div class="vet-panel-header">
+                    <h3 class="vet-panel-title">Upcoming vaccinations - next 7 days</h3>
+                    <i class="bi bi-three-dots text-muted"></i>
                 </div>
-            </div>
-
-            <div class="col-lg-6">
-                <div class="admin-card h-100">
-                    <div class="admin-card-header">
-                        <h5 class="admin-card-title"><i class="bi bi-bell-fill me-2"></i>Upcoming due items</h5>
-                    </div>
-                    <div class="p-3">
-                        <?php if (count($upcoming) > 0): ?>
-                            <div class="table-responsive">
-                                <table class="admin-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Pet</th>
-                                            <th>Type</th>
-                                            <th>Due date</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php foreach ($upcoming as $row): ?>
-                                            <tr>
-                                                <td><?= htmlspecialchars((string)$row['pet_name']) ?></td>
-                                                <td><?= htmlspecialchars((string)$row['reminder_type']) ?></td>
-                                                <td><?= htmlspecialchars(date('M j, Y', strtotime((string)$row['due_date']))) ?></td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                        <?php else: ?>
-                            <p class="text-muted mb-0">No upcoming due records found.</p>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row g-3 mb-4">
-            <div class="col-lg-4">
-                <div class="admin-card h-100">
-                    <div class="admin-card-header">
-                        <h5 class="admin-card-title"><i class="bi bi-syringe me-2"></i>Add vaccination</h5>
-                    </div>
-                    <div class="p-3">
-                        <form method="post" class="row g-2">
-                            <input type="hidden" name="action" value="add_vaccination"/>
-                            <div class="col-12">
-                                <label class="form-label">Pet *</label>
-                                <select name="pet_id" class="form-select" required>
-                                    <option value="">Select pet</option>
-                                    <?php foreach ($pets as $pet): ?>
-                                        <option value="<?= (int)$pet['id'] ?>"><?= htmlspecialchars((string)$pet['name']) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label">Vaccine name *</label>
-                                <input type="text" name="vaccine_name" class="form-control" required/>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label">Date given *</label>
-                                <input type="date" name="date_given" class="form-control" required/>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label">Next due</label>
-                                <input type="date" name="next_due_date" class="form-control"/>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label">Dose number</label>
-                                <input type="text" name="dose_number" class="form-control"/>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label">Batch number</label>
-                                <input type="text" name="batch_number" class="form-control"/>
-                            </div>
-                            <div class="col-12">
-                                <textarea name="vaccination_notes" class="form-control" rows="2" placeholder="Notes"></textarea>
-                            </div>
-                            <div class="col-12">
-                                <button class="btn btn-dark w-100" type="submit">Save vaccination</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-4">
-                <div class="admin-card h-100">
-                    <div class="admin-card-header">
-                        <h5 class="admin-card-title"><i class="bi bi-capsule-pill me-2"></i>Add deworming</h5>
-                    </div>
-                    <div class="p-3">
-                        <form method="post" class="row g-2">
-                            <input type="hidden" name="action" value="add_deworming"/>
-                            <div class="col-12">
-                                <label class="form-label">Pet *</label>
-                                <select name="pet_id" class="form-select" required>
-                                    <option value="">Select pet</option>
-                                    <?php foreach ($pets as $pet): ?>
-                                        <option value="<?= (int)$pet['id'] ?>"><?= htmlspecialchars((string)$pet['name']) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label">Product name *</label>
-                                <input type="text" name="product_name" class="form-control" required/>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label">Date given *</label>
-                                <input type="date" name="deworming_date_given" class="form-control" required/>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label">Next due</label>
-                                <input type="date" name="deworming_next_due_date" class="form-control"/>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label">Dose</label>
-                                <input type="text" name="dose" class="form-control"/>
-                            </div>
-                            <div class="col-12">
-                                <textarea name="deworming_notes" class="form-control" rows="2" placeholder="Notes"></textarea>
-                            </div>
-                            <div class="col-12">
-                                <button class="btn btn-dark w-100" type="submit">Save deworming</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-4">
-                <div class="admin-card h-100">
-                    <div class="admin-card-header">
-                        <h5 class="admin-card-title"><i class="bi bi-heart-pulse-fill me-2"></i>Add treatment</h5>
-                    </div>
-                    <div class="p-3">
-                        <form method="post" class="row g-2">
-                            <input type="hidden" name="action" value="add_treatment"/>
-                            <div class="col-12">
-                                <label class="form-label">Pet *</label>
-                                <select name="pet_id" class="form-select" required>
-                                    <option value="">Select pet</option>
-                                    <?php foreach ($pets as $pet): ?>
-                                        <option value="<?= (int)$pet['id'] ?>"><?= htmlspecialchars((string)$pet['name']) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label">Treatment date *</label>
-                                <input type="date" name="treatment_date" class="form-control" required/>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label">Follow-up date</label>
-                                <input type="date" name="followup_date" class="form-control"/>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label">Diagnosis</label>
-                                <input type="text" name="diagnosis" class="form-control"/>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label">Severity</label>
-                                <select name="severity" class="form-select">
-                                    <option value="">Select</option>
-                                    <option value="mild">Mild</option>
-                                    <option value="moderate">Moderate</option>
-                                    <option value="severe">Severe</option>
-                                    <option value="critical">Critical</option>
-                                </select>
-                            </div>
-                            <div class="col-12">
-                                <textarea name="treatment" class="form-control" rows="2" placeholder="Treatment details"></textarea>
-                            </div>
-                            <div class="col-12">
-                                <textarea name="treatment_notes" class="form-control" rows="2" placeholder="Notes"></textarea>
-                            </div>
-                            <div class="col-12">
-                                <button class="btn btn-dark w-100" type="submit">Save treatment</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="admin-card">
-            <div class="admin-card-header">
-                <h5 class="admin-card-title"><i class="bi bi-list-ul me-2"></i>My pets</h5>
-            </div>
-            <div class="table-responsive">
-                <table class="admin-table">
-                    <thead>
-                        <tr>
-                            <th>PET</th>
-                            <?php if ($has_pet_code): ?><th>CODE</th><?php endif; ?>
-                            <th>SPECIES/BREED</th>
-                            <th>OWNER</th>
-                            <th>STATUS</th>
-                            <th>LAST VISIT</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (count($pets) > 0): ?>
-                            <?php foreach ($pets as $pet): ?>
-                                <tr>
-                                    <td><strong><?= htmlspecialchars((string)$pet['name']) ?></strong></td>
-                                    <?php if ($has_pet_code): ?>
-                                        <td><?= htmlspecialchars((string)($pet['pet_code'] ?? '')) ?></td>
-                                    <?php endif; ?>
-                                    <td>
-                                        <?= htmlspecialchars(trim(((string)($pet['species'] ?? '')) . ' / ' . ((string)($pet['breed'] ?? '')))) ?>
-                                    </td>
-                                    <td>
-                                        <?= htmlspecialchars((string)($pet['owner_name'] ?: 'Not linked')) ?>
-                                        <?php if (!empty($pet['owner_email'])): ?>
-                                            <br><small class="text-muted"><?= htmlspecialchars((string)$pet['owner_email']) ?></small>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td><?= htmlspecialchars(ucfirst((string)($pet['status'] ?? 'healthy'))) ?></td>
-                                    <td><?= htmlspecialchars(!empty($pet['last_visit']) ? date('M j, Y', strtotime((string)$pet['last_visit'])) : '-') ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php else: ?>
+                <div class="table-responsive">
+                    <table class="vet-panel-table">
+                        <thead>
                             <tr>
-                                <td colspan="<?= $has_pet_code ? '6' : '5' ?>" class="text-center text-muted py-4">No pets added yet.</td>
+                                <th>Patient</th>
+                                <th>Treatment</th>
+                                <th>Scheduled</th>
+                                <th>Status</th>
                             </tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
+                        </thead>
+                        <tbody>
+                            <?php if (count($vaccinations_panel) > 0): ?>
+                                <?php foreach ($vaccinations_panel as $row): ?>
+                                    <?php
+                                    $due_date = (string)$row['due_date'];
+                                    $status_class = 'vet-pill-upcoming';
+                                    $status_text = 'UPCOMING';
+                                    if ($due_date < $today) {
+                                        $status_class = 'vet-pill-overdue';
+                                        $status_text = 'OVERDUE';
+                                    } elseif ($due_date <= date('Y-m-d', strtotime('+3 days'))) {
+                                        $status_class = 'vet-pill-soon';
+                                        $status_text = 'SOON';
+                                    }
+                                    ?>
+                                    <tr>
+                                        <td>
+                                            <div class="vet-patient-cell">
+                                                <span class="vet-avatar"><?= htmlspecialchars(strtoupper(substr((string)$row['pet_name'], 0, 1))) ?></span>
+                                                <span><?= htmlspecialchars((string)$row['pet_name']) ?></span>
+                                            </div>
+                                        </td>
+                                        <td><?= htmlspecialchars((string)$row['treatment_name']) ?></td>
+                                        <td><?= htmlspecialchars(date('M j', strtotime($due_date))) ?></td>
+                                        <td><span class="vet-pill <?= $status_class ?>"><?= $status_text ?></span></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td colspan="4" class="text-muted">No upcoming vaccinations found.</td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+
+            <article class="vet-panel">
+                <div class="vet-panel-header">
+                    <h3 class="vet-panel-title">Follow-ups needed</h3>
+                    <i class="bi bi-three-dots text-muted"></i>
+                </div>
+                <div class="table-responsive">
+                    <table class="vet-panel-table">
+                        <thead>
+                            <tr>
+                                <th>Patient</th>
+                                <th>Case</th>
+                                <th>Priority</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (count($followups_panel) > 0): ?>
+                                <?php foreach ($followups_panel as $row): ?>
+                                    <?php
+                                    $followup_date = (string)$row['followup_date'];
+                                    $priority_class = 'vet-pill-scheduled';
+                                    $priority_text = 'SCHEDULED';
+                                    if ($followup_date < $today) {
+                                        $priority_class = 'vet-pill-overdue';
+                                        $priority_text = 'OVERDUE';
+                                    } elseif ($followup_date <= date('Y-m-d', strtotime('+3 days'))) {
+                                        $priority_class = 'vet-pill-soon';
+                                        $priority_text = 'SOON';
+                                    }
+                                    ?>
+                                    <tr>
+                                        <td>
+                                            <div class="vet-patient-cell">
+                                                <span class="vet-avatar"><?= htmlspecialchars(strtoupper(substr((string)$row['pet_name'], 0, 1))) ?></span>
+                                                <span><?= htmlspecialchars((string)$row['pet_name']) ?></span>
+                                            </div>
+                                        </td>
+                                        <td><?= htmlspecialchars((string)$row['case_name']) ?></td>
+                                        <td><span class="vet-pill <?= $priority_class ?>"><?= $priority_text ?></span></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td colspan="3" class="text-muted">No follow-ups found.</td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+        </section>
+    </main>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
