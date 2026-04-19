@@ -333,6 +333,16 @@ body {
     color: #0f766e;
 }
 
+.vet-pill-updated {
+    background: #e8edf5;
+    color: #0f766e;
+}
+
+.vet-pill-status {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
 .vet-pill-upcoming {
     background: #f0fdf9;
     color: #0f766e;
@@ -344,23 +354,23 @@ body {
 }
 
 .vet-health-healthy {
-    background: #e8edf5;
-    color: #475569;
+    background: #dcfce7;
+    color: #166534;
 }
 
 .vet-health-sick {
-    background: #111827;
-    color: #ffffff;
+    background: #fee2e2;
+    color: #991b1b;
 }
 
 .vet-health-treatment {
-    background: #dbe4ef;
-    color: #475569;
+    background: #fef08a;
+    color: #713f12;
 }
 
 .vet-health-recovering {
-    background: #dbe4ef;
-    color: #475569;
+    background: #dbeafe;
+    color: #075985;
 }
 
 .patients-header {
