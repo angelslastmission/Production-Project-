@@ -4,7 +4,28 @@ include '../config.php';
 include 'includes/auth.php';
 
 $active_page = 'dashboard';
-include 'includes/dashboard_backend.php';
+
+$success_message = '';
+$error_message = '';
+$vet_id = (int)($_SESSION['user_id'] ?? 0);
+
+if ($vet_id <= 0) {
+    header('Location: ../login.php');
+    exit();
+}
+$stats = [
+    'pets' => 0
+];
+
+$pets_count_stmt = mysqli_prepare($conn, 'SELECT COUNT(*) AS c FROM pets WHERE vet_id = ?');
+if ($pets_count_stmt) {
+    mysqli_stmt_bind_param($pets_count_stmt, 'i', $vet_id);
+    mysqli_stmt_execute($pets_count_stmt);
+    $pets_count_result = mysqli_stmt_get_result($pets_count_stmt);
+    $pets_count_row = $pets_count_result ? mysqli_fetch_assoc($pets_count_result) : null;
+    $stats['pets'] = (int)($pets_count_row['c'] ?? 0);
+    mysqli_stmt_close($pets_count_stmt);
+}
 
 $today = date('Y-m-d');
 
@@ -142,6 +163,7 @@ if ($followups_panel_stmt) {
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
   <link href="../assets/css/vet.css" rel="stylesheet"/>
 </head>
 <body>
