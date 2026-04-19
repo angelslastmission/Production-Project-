@@ -1,6 +1,6 @@
 body {
     margin: 0;
-    background: #f3f4f6;
+    background: #f8fafc;
     color: #0f172a;
     font-family: 'DM Sans', sans-serif;
 }
@@ -11,77 +11,105 @@ body {
 }
 
 .vet-sidebar {
-    width: 220px;
-    background: #e5e7eb;
-    border-right: 1px solid #d7dbe1;
-    padding: 16px 14px;
+    width: 240px;
+    background: #ffffff;
+    border-right: 1px solid #e5e7eb;
+    padding: 24px 12px;
     display: flex;
     flex-direction: column;
+}
+
+.vet-brand {
+    padding: 0 8px 16px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.vet-brand-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.vet-brand-paw {
+    font-size: 1.1rem;
+    line-height: 1;
 }
 
 .vet-brand-title {
     margin: 0;
     font-family: 'Sora', sans-serif;
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: #111827;
-}
-
-.vet-brand-logo {
-    width: 86px;
-    height: 86px;
-    border: 1px dashed #cbd5e1;
-    margin: 10px 0 6px;
-    border-radius: 6px;
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #134e4a;
 }
 
 .vet-brand-sub {
     margin: 0;
-    color: #64748b;
-    font-size: 0.86rem;
+    color: #6b7280;
+    font-size: 0.82rem;
+    font-weight: 500;
 }
 
 .vet-nav {
-    margin-top: 26px;
+    margin-top: 12px;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
+}
+
+.vet-nav-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #9ca3af;
+    letter-spacing: 1px;
+    margin: 12px 8px 4px;
 }
 
 .vet-nav-link {
     display: flex;
     align-items: center;
     gap: 10px;
-    color: #64748b;
+    color: #4b5563;
     text-decoration: none;
-    font-size: 0.96rem;
-    font-weight: 600;
+    font-size: 0.9rem;
+    font-weight: 500;
     border-radius: 8px;
-    padding: 10px 10px;
+    padding: 10px 12px;
 }
 
 .vet-nav-link:hover {
-    color: #0f172a;
-    background: #dbe0e8;
+    color: #0d9488;
+    background: #f0fdf9;
 }
 
 .vet-nav-link.active {
-    color: #0f172a;
-    background: #d4dbe5;
+    color: #0d9488;
+    background: #f0fdf9;
+    font-weight: 700;
 }
 
 .vet-sidebar-bottom {
     margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid #f3f4f6;
 }
 
 .vet-logout-link {
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     text-decoration: none;
-    color: #475569;
+    color: #ef4444;
     font-size: 0.9rem;
-    font-weight: 700;
+    font-weight: 600;
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.vet-logout-link:hover {
+    background: #fef2f2;
+    color: #dc2626;
 }
 
 .vet-main {
@@ -98,7 +126,7 @@ body {
     width: 100%;
     border: 0;
     border-radius: 999px;
-    background: #e2e8f0;
+    background: #eef2f7;
     color: #334155;
     padding: 10px 16px;
     font-size: 0.95rem;
@@ -131,8 +159,8 @@ body {
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    background: #e2e8f0;
-    border-left: 4px solid #1f2937;
+    background: #f0fdf9;
+    border-left: 4px solid #0d9488;
     border-radius: 12px;
     padding: 12px 14px;
     margin-bottom: 16px;
@@ -142,13 +170,13 @@ body {
     display: flex;
     align-items: center;
     gap: 10px;
-    color: #1f2937;
+    color: #0f766e;
     font-size: 0.96rem;
     font-weight: 700;
 }
 
 .vet-alert-btn {
-    background: #0f172a;
+    background: #0d9488;
     color: #ffffff;
     border: 0;
     border-radius: 999px;
@@ -277,23 +305,23 @@ body {
 }
 
 .vet-pill-overdue {
-    background: #0f172a;
+    background: #0d9488;
     color: #ffffff;
 }
 
 .vet-pill-soon {
-    background: #cbd5e1;
-    color: #334155;
+    background: #ccfbf1;
+    color: #0f766e;
 }
 
 .vet-pill-upcoming {
-    background: #e2e8f0;
-    color: #64748b;
+    background: #f0fdf9;
+    color: #0f766e;
 }
 
 .vet-pill-scheduled {
-    background: #e8eef6;
-    color: #64748b;
+    background: #e0f2fe;
+    color: #0c4a6e;
 }
 
 @media (max-width: 1200px) {
