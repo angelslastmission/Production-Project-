@@ -153,6 +153,15 @@ if ($followups_panel_stmt) {
     }
     mysqli_stmt_close($followups_panel_stmt);
 }
+
+$hour = (int)date('H');
+if ($hour < 12) {
+    $greeting = 'Good morning';
+} elseif ($hour < 17) {
+    $greeting = 'Good afternoon';
+} else {
+    $greeting = 'Good evening';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -176,7 +185,7 @@ if ($followups_panel_stmt) {
         </div>
 
         <section class="vet-greeting">
-            <h1>Good morning, <?= htmlspecialchars($_SESSION['user_name']) ?></h1>
+            <h1><?= $greeting ?>, <?= htmlspecialchars($_SESSION['user_name']) ?> 👋</h1>
             <p><?= htmlspecialchars(date('l, j F Y')) ?> | <?= htmlspecialchars($_SESSION['clinic_name'] ?? 'Animal Care Clinic') ?></p>
         </section>
 
@@ -188,15 +197,17 @@ if ($followups_panel_stmt) {
             <div class="alert alert-danger py-2 mb-2"><?= htmlspecialchars($error_message) ?></div>
         <?php endif; ?>
 
+        <?php if ($overdue_count > 0): ?>
         <section class="vet-alert">
             <div class="vet-alert-text">
                 <i class="bi bi-exclamation-triangle"></i>
-                <span>! <?= (int)$overdue_count ?> vaccinations are overdue - send reminders to owners now.</span>
+                <span><?= (int)$overdue_count ?> vaccination<?= $overdue_count > 1 ? 's are' : ' is' ?> overdue - send reminders to owners now.</span>
             </div>
             <div>
                 <button type="button" class="vet-alert-btn">SEND ALL</button>
             </div>
         </section>
+        <?php endif; ?>
 
         <section class="vet-stats">
             <article class="vet-stat-card">
