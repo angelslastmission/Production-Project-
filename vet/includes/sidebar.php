@@ -1,7 +1,9 @@
 <aside class="vet-sidebar">
     <div class="vet-brand">
-        <h4 class="vet-brand-title">PetCare HMS</h4>
-        <div class="vet-brand-logo"></div>
+        <div class="vet-brand-logo">
+            <span class="vet-brand-paw">🐾</span>
+            <span class="vet-brand-title">PetCura</span>
+        </div>
         <p class="vet-brand-sub">Veterinary Management</p>
     </div>
 
@@ -10,6 +12,9 @@
             <i class="bi bi-grid"></i>
             <span>Dashboard</span>
         </a>
+
+        <p class="vet-nav-label">MANAGE</p>
+
         <a href="#" class="vet-nav-link">
             <i class="bi bi-people-fill"></i>
             <span>Patients</span>
@@ -26,6 +31,9 @@
             <i class="bi bi-person-badge"></i>
             <span>Owners</span>
         </a>
+
+        <p class="vet-nav-label">SYSTEM</p>
+
         <a href="#" class="vet-nav-link">
             <i class="bi bi-gear"></i>
             <span>Settings</span>
