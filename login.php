@@ -40,8 +40,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         // Find user by email and role
         $stmt = mysqli_prepare($conn,
-            "SELECT id, first_name, last_name, password, role, status, is_active
-             FROM users WHERE email = ? AND role = ?");
+          "SELECT id, first_name, last_name, password, role, status, is_active, clinic_name
+           FROM users WHERE email = ? AND role = ?");
         mysqli_stmt_bind_param($stmt, 'ss', $email, $role);
         mysqli_stmt_execute($stmt);
         $result = mysqli_stmt_get_result($stmt);
@@ -63,6 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['user_name']  = $user['first_name'] . ' ' . $user['last_name'];
             $_SESSION['user_role']  = $user['role'];
             $_SESSION['user_email'] = $email;
+            $_SESSION['clinic_name'] = $user['clinic_name'] ?? '';
 
             // Redirect based on role
             if ($user['role'] === 'vet') {
