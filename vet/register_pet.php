@@ -14,9 +14,13 @@ $form_data = [
     'pet_name' => '',
     'species' => '',
     'breed' => '',
+    'gender' => '',
     'dob' => '',
+    'weight' => '',
+    'allergies' => '',
+    'is_neutered' => 0,
     'owner_email' => '',
-    'status' => 'Healthy'
+    'status' => 'healthy'
 ];
 
 // ── Handle form submission ───────────
@@ -25,9 +29,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $form_data['pet_name'] = trim($_POST['pet_name'] ?? '');
     $form_data['species'] = trim($_POST['species'] ?? '');
     $form_data['breed'] = trim($_POST['breed'] ?? '');
+    $form_data['gender'] = trim($_POST['gender'] ?? '');
     $form_data['dob'] = trim($_POST['dob'] ?? '');
+    $form_data['weight'] = trim($_POST['weight'] ?? '');
+    $form_data['allergies'] = trim($_POST['allergies'] ?? '');
+    $form_data['is_neutered'] = isset($_POST['is_neutered']) ? 1 : 0;
     $form_data['owner_email'] = trim($_POST['owner_email'] ?? '');
-    $form_data['status'] = trim($_POST['status'] ?? 'Healthy');
+    $form_data['status'] = trim($_POST['status'] ?? 'healthy');
+
+    $allowed_status = ['healthy', 'sick', 'treatment', 'recovering'];
+    $allowed_gender = ['', 'male', 'female'];
 
     // Validate form data
     if (empty($form_data['pet_name'])) {
@@ -38,6 +49,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Owner email is required';
     } elseif (!filter_var($form_data['owner_email'], FILTER_VALIDATE_EMAIL)) {
         $error = 'Invalid owner email address';
+    } elseif (!in_array($form_data['status'], $allowed_status, true)) {
+        $error = 'Invalid health status selected';
+    } elseif (!in_array($form_data['gender'], $allowed_gender, true)) {
+        $error = 'Invalid gender selected';
+    } elseif ($form_data['weight'] !== '' && (!is_numeric($form_data['weight']) || (float)$form_data['weight'] <= 0)) {
+        $error = 'Weight must be a valid positive number';
     }
 
     if (empty($error)) {
@@ -61,31 +78,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'This pet name already exists for this owner';
             } else {
                 // ── Insert pet into database ────
+                $vet_id = (int)($_SESSION['user_id'] ?? 0);
+                if ($vet_id <= 0) {
+                    $error = 'Invalid session. Please login again.';
+                }
+
                 $species = mysqli_real_escape_string($conn, $form_data['species']);
                 $breed = mysqli_real_escape_string($conn, $form_data['breed']);
+                $gender = $form_data['gender'] !== ''
+                    ? "'" . mysqli_real_escape_string($conn, $form_data['gender']) . "'"
+                    : 'NULL';
                 $dob = !empty($form_data['dob']) 
                     ? "'" . mysqli_real_escape_string($conn, $form_data['dob']) . "'"
                     : 'NULL';
+                $weight = $form_data['weight'] !== '' ? (float)$form_data['weight'] : 'NULL';
+                $allergies = $form_data['allergies'] !== ''
+                    ? "'" . mysqli_real_escape_string($conn, $form_data['allergies']) . "'"
+                    : 'NULL';
+                $is_neutered = (int)$form_data['is_neutered'];
                 $status = mysqli_real_escape_string($conn, $form_data['status']);
 
-                $insert_query = "
-                    INSERT INTO pets (owner_id, name, species, breed, dob, status, created_at, updated_at)
-                    VALUES ($owner_id, '$pet_name', '$species', '$breed', $dob, '$status', NOW(), NOW())
-                ";
+                if (empty($error)) {
+                    $insert_query = "
+                        INSERT INTO pets (vet_id, owner_id, name, species, breed, gender, dob, weight, allergies, is_neutered, status, created_at)
+                        VALUES ($vet_id, $owner_id, '$pet_name', '$species', '$breed', $gender, $dob, $weight, $allergies, $is_neutered, '$status', NOW())
+                    ";
 
-                if (mysqli_query($conn, $insert_query)) {
-                    $success = 'Pet registered successfully!';
-                    // Clear form data on success
-                    $form_data = [
-                        'pet_name' => '',
-                        'species' => '',
-                        'breed' => '',
-                        'dob' => '',
-                        'owner_email' => '',
-                        'status' => 'Healthy'
-                    ];
-                } else {
-                    $error = 'Database error: ' . mysqli_error($conn);
+                    if (mysqli_query($conn, $insert_query)) {
+                        $success = 'Pet registered successfully!';
+                        // Clear form data on success
+                        $form_data = [
+                            'pet_name' => '',
+                            'species' => '',
+                            'breed' => '',
+                            'gender' => '',
+                            'dob' => '',
+                            'weight' => '',
+                            'allergies' => '',
+                            'is_neutered' => 0,
+                            'owner_email' => '',
+                            'status' => 'healthy'
+                        ];
+                    } else {
+                        $error = 'Database error: ' . mysqli_error($conn);
+                    }
                 }
             }
         }
@@ -157,8 +193,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <input type="text" name="breed" class="form-control" placeholder="Labrador" value="<?= htmlspecialchars($form_data['breed']) ?>"/>
                         </div>
                         <div class="col-md-6">
+                            <label class="form-label small text-secondary">Gender</label>
+                            <select name="gender" class="form-select">
+                                <option value="" <?= $form_data['gender'] === '' ? 'selected' : '' ?>>Select gender</option>
+                                <option value="male" <?= $form_data['gender'] === 'male' ? 'selected' : '' ?>>Male</option>
+                                <option value="female" <?= $form_data['gender'] === 'female' ? 'selected' : '' ?>>Female</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
                             <label class="form-label small text-secondary">Date of birth</label>
                             <input type="date" name="dob" class="form-control" value="<?= htmlspecialchars($form_data['dob']) ?>"/>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-secondary">Weight (kg)</label>
+                            <input type="number" name="weight" class="form-control" placeholder="12.50" min="0.1" step="0.01" value="<?= htmlspecialchars($form_data['weight']) ?>"/>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small text-secondary">Owner email <span style="color: #dc2626;">*</span></label>
@@ -167,11 +215,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div class="col-md-6">
                             <label class="form-label small text-secondary">Health status</label>
                             <select name="status" class="form-select">
-                                <option value="Healthy" <?= $form_data['status'] === 'Healthy' ? 'selected' : '' ?>>Healthy</option>
-                                <option value="Sick" <?= $form_data['status'] === 'Sick' ? 'selected' : '' ?>>Sick</option>
-                                <option value="Treatment" <?= $form_data['status'] === 'Treatment' ? 'selected' : '' ?>>Treatment</option>
-                                <option value="Recovering" <?= $form_data['status'] === 'Recovering' ? 'selected' : '' ?>>Recovering</option>
+                                <option value="healthy" <?= $form_data['status'] === 'healthy' ? 'selected' : '' ?>>Healthy</option>
+                                <option value="sick" <?= $form_data['status'] === 'sick' ? 'selected' : '' ?>>Sick</option>
+                                <option value="treatment" <?= $form_data['status'] === 'treatment' ? 'selected' : '' ?>>Treatment</option>
+                                <option value="recovering" <?= $form_data['status'] === 'recovering' ? 'selected' : '' ?>>Recovering</option>
                             </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small text-secondary">Allergies</label>
+                            <textarea name="allergies" class="form-control" rows="3" placeholder="Mention known allergies (optional)"><?= htmlspecialchars($form_data['allergies']) ?></textarea>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check mt-1">
+                                <input class="form-check-input" type="checkbox" id="is_neutered" name="is_neutered" value="1" <?= (int)$form_data['is_neutered'] === 1 ? 'checked' : '' ?> />
+                                <label class="form-check-label small text-secondary" for="is_neutered">
+                                    Pet is neutered/spayed
+                                </label>
+                            </div>
                         </div>
                     </div>
                     <div class="mt-3 d-flex gap-2">
