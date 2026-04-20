@@ -18,7 +18,7 @@ $form_data = [
     'treatment' => '',
     'treatment_date' => '',
     'followup_date' => '',
-    'severity' => 'mild',
+    'severity' => '',
     'notes' => ''
 ];
 
@@ -58,6 +58,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $vet_id > 0) {
         $error = 'Diagnosis is required.';
     } elseif ($form_data['treatment_date'] === '') {
         $error = 'Treatment date is required.';
+    } elseif ($form_data['severity'] === '') {
+        $error = 'Please select a priority.';
     } elseif (!in_array($form_data['severity'], $allowed_severity, true)) {
         $error = 'Invalid priority selected.';
     }
@@ -101,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $vet_id > 0) {
                 'treatment' => '',
                 'treatment_date' => '',
                 'followup_date' => '',
-                'severity' => 'mild',
+                'severity' => '',
                 'notes' => ''
             ];
         } else {
@@ -208,6 +210,7 @@ function severity_badge($severity)
                     <div class="col-md-6">
                         <label class="form-label small text-secondary">Priority</label>
                         <select name="severity" class="form-select">
+                            <option value="" <?= $form_data['severity'] === '' ? 'selected' : '' ?>>Select priority</option>
                             <option value="mild" <?= $form_data['severity'] === 'mild' ? 'selected' : '' ?>>Low</option>
                             <option value="moderate" <?= $form_data['severity'] === 'moderate' ? 'selected' : '' ?>>Medium</option>
                             <option value="severe" <?= $form_data['severity'] === 'severe' ? 'selected' : '' ?>>High</option>
