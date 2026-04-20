@@ -130,18 +130,6 @@ if ($vet_id > 0) {
         }
     }
 }
-
-function severity_badge($severity)
-{
-    $map = [
-        'critical' => ['Urgent', 'vet-pill-overdue'],
-        'severe' => ['High', 'vet-pill-overdue'],
-        'moderate' => ['Medium', 'vet-pill-soon'],
-        'mild' => ['Low', 'vet-pill-updated']
-    ];
-
-    return $map[$severity] ?? ['Unknown', 'vet-pill-status'];
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -255,7 +243,21 @@ function severity_badge($severity)
                         </tr>
                         <?php else: ?>
                             <?php foreach ($treatments as $row): ?>
-                                <?php [$label, $badge_class] = severity_badge($row['severity']); ?>
+                                <?php
+                                $label = 'Low';
+                                $badge_class = 'vet-pill-updated';
+
+                                if ($row['severity'] === 'moderate') {
+                                    $label = 'Medium';
+                                    $badge_class = 'vet-pill-soon';
+                                } elseif ($row['severity'] === 'severe') {
+                                    $label = 'High';
+                                    $badge_class = 'vet-pill-overdue';
+                                } elseif ($row['severity'] === 'critical') {
+                                    $label = 'Urgent';
+                                    $badge_class = 'vet-pill-overdue';
+                                }
+                                ?>
                                 <tr>
                                     <td><?= htmlspecialchars($row['pet_name']) ?></td>
                                     <td><?= htmlspecialchars($row['diagnosis']) ?></td>

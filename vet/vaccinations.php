@@ -77,7 +77,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $vet_id > 0) {
         } else {
             $pet_row = mysqli_fetch_assoc($pet_check);
             $pet_species = $pet_row['species'] ?? '';
-            $allowed_vaccines = $vaccine_catalog[$pet_species] ?? [];
+            $allowed_vaccines = isset($vaccine_catalog[$pet_species]) ? $vaccine_catalog[$pet_species] : [];
+
             if (!in_array($form_data['vaccine_name'], $allowed_vaccines, true)) {
                 $error = 'Invalid vaccine selected for this species.';
             }
@@ -124,6 +125,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $vet_id > 0) {
 }
 
 $vaccinations = [];
+$today = new DateTime(date('Y-m-d'));
+
 if ($vet_id > 0) {
     $vaccination_query = mysqli_query(
         $conn,
@@ -275,7 +278,29 @@ function get_due_status($next_due_date)
                         </tr>
                         <?php else: ?>
                             <?php foreach ($vaccinations as $row): ?>
-                                <?php $status = get_due_status($row['next_due_date']); ?>
+                                <?php
+                                $status_label = 'No due date';
+                                $status_class = 'vet-pill-status';
+
+                                if (!empty($row['next_due_date']) && $row['next_due_date'] !== '0000-00-00') {
+                                    $due_date = new DateTime($row['next_due_date']);
+
+                                    if ($due_date < $today) {
+                                        $status_label = 'Overdue';
+                                        $status_class = 'vet-pill-overdue';
+                                    } else {
+                                        $days_left = (int)$today->diff($due_date)->days;
+
+                                        if ($days_left <= 14) {
+                                            $status_label = 'Due soon';
+                                            $status_class = 'vet-pill-soon';
+                                        } else {
+                                            $status_label = 'Up to date';
+                                            $status_class = 'vet-pill-updated';
+                                        }
+                                    }
+                                }
+                                ?>
                                 <tr>
                                     <td><?= htmlspecialchars($row['pet_name']) ?></td>
                                     <td><?= htmlspecialchars($row['vaccine_name']) ?></td>
@@ -284,8 +309,8 @@ function get_due_status($next_due_date)
                                         <?= $row['next_due_date'] ? htmlspecialchars(date('M d, Y', strtotime($row['next_due_date']))) : 'N/A' ?>
                                     </td>
                                     <td>
-                                        <span class="vet-pill <?= htmlspecialchars($status['class']) ?>">
-                                            <?= htmlspecialchars($status['label']) ?>
+                                        <span class="vet-pill <?= htmlspecialchars($status_class) ?>">
+                                            <?= htmlspecialchars($status_label) ?>
                                         </span>
                                     </td>
                                 </tr>
@@ -327,7 +352,6 @@ function populateVaccineOptions() {
 
 if (petSelect && vaccineSelect) {
     petSelect.addEventListener('change', function() {
-        vaccineSelect.dataset.prev = vaccineSelect.value;
         populateVaccineOptions();
     });
     populateVaccineOptions();
