@@ -149,7 +149,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <section class="vet-panel">
             <div class="vet-panel-header">
                 <h3 class="vet-panel-title">Register pet</h3>
-                <a href="patients.php" class="patients-view-btn">Back</a>
             </div>
 
             <?php if (!empty($success)): ?>
@@ -175,7 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label small text-secondary">Pet name <span style="color: #dc2626;">*</span></label>
-                            <input type="text" name="pet_name" class="form-control" placeholder="Bruno" value="<?= htmlspecialchars($form_data['pet_name']) ?>" required/>
+                            <input type="text" name="pet_name" class="form-control" value="<?= htmlspecialchars($form_data['pet_name']) ?>" required/>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small text-secondary">Species <span style="color: #dc2626;">*</span></label>
@@ -190,7 +189,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small text-secondary">Breed</label>
-                            <input type="text" name="breed" class="form-control" placeholder="Labrador" value="<?= htmlspecialchars($form_data['breed']) ?>"/>
+                            <select id="breed_select" name="breed" class="form-select">
+                                <option value="">Select breed</option>
+                            </select>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small text-secondary">Gender</label>
@@ -206,11 +207,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small text-secondary">Weight (kg)</label>
-                            <input type="number" name="weight" class="form-control" placeholder="12.50" min="0.1" step="0.01" value="<?= htmlspecialchars($form_data['weight']) ?>"/>
+                            <input type="number" name="weight" class="form-control" min="0.1" step="0.01" value="<?= htmlspecialchars($form_data['weight']) ?>"/>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small text-secondary">Owner email <span style="color: #dc2626;">*</span></label>
-                            <input type="email" name="owner_email" class="form-control" placeholder="owner@email.com" value="<?= htmlspecialchars($form_data['owner_email']) ?>" required/>
+                            <input type="email" name="owner_email" class="form-control" value="<?= htmlspecialchars($form_data['owner_email']) ?>" required/>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small text-secondary">Health status</label>
@@ -223,7 +224,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                         <div class="col-12">
                             <label class="form-label small text-secondary">Allergies</label>
-                            <textarea name="allergies" class="form-control" rows="3" placeholder="Mention known allergies (optional)"><?= htmlspecialchars($form_data['allergies']) ?></textarea>
+                            <textarea name="allergies" class="form-control" rows="3"><?= htmlspecialchars($form_data['allergies']) ?></textarea>
                         </div>
                         <div class="col-12">
                             <div class="form-check mt-1">
@@ -243,5 +244,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </section>
     </main>
 </div>
+<script>
+const breedOptionsBySpecies = {
+    Dog: [
+        'German Shepherd', 'Golden Retriever', 'Labrador Retriever', 'Pug', 'Beagle',
+        'Rottweiler', 'Doberman', 'Siberian Husky', 'Lhasa Apso', 'Tibetan Mastiff',
+        'Japanese Spitz', 'Jack Russell Terrier', 'Jindo', 'Jagdterrier', 'Javanese',
+        'Nepali Bhote Kukur', 'Himalayan Sheepdog'
+    ],
+    Cat: [
+        'Persian', 'Siamese', 'Maine Coon', 'British Shorthair', 'Bengal',
+        'Ragdoll', 'Sphynx', 'Scottish Fold', 'Javanese', 'Japanese Bobtail'
+    ],
+    Bird: [
+        'Budgerigar', 'Cockatiel', 'Lovebird', 'African Grey', 'Canary',
+        'Java Sparrow'
+    ],
+    Rabbit: [
+        'New Zealand White', 'Holland Lop', 'Mini Rex', 'Lionhead', 'Jersey Wooly'
+    ],
+    Hamster: [
+        'Syrian', 'Roborovski', 'Campbell Dwarf', 'Winter White', 'Chinese Hamster'
+    ]
+};
+
+const speciesSelect = document.querySelector('select[name="species"]');
+const breedSelect = document.getElementById('breed_select');
+const preselectedBreed = '<?= addslashes($form_data['breed']) ?>';
+
+function updateBreedOptions() {
+    const species = speciesSelect ? speciesSelect.value : '';
+    const options = breedOptionsBySpecies[species] || [];
+
+    breedSelect.innerHTML = '<option value="">Select breed</option>';
+
+    options.forEach((breed) => {
+        const option = document.createElement('option');
+        option.value = breed;
+        option.textContent = breed;
+        if (breed === preselectedBreed) {
+            option.selected = true;
+        }
+        breedSelect.appendChild(option);
+    });
+}
+
+if (speciesSelect && breedSelect) {
+    speciesSelect.addEventListener('change', updateBreedOptions);
+    updateBreedOptions();
+}
+</script>
 </body>
 </html>
