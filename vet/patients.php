@@ -103,6 +103,9 @@ function get_vaccine_status($conn, $pet_id) {
 while ($pet = mysqli_fetch_assoc($pets_result)) {
     $vax_status = get_vaccine_status($conn, $pet['id']);
     $pet['vaccine_status'] = $vax_status;
+    $pet['vaccination_display'] = $vax_status['status'] === 'not-recorded'
+        ? ['label' => 'Not vaccinated', 'class' => 'vet-pill-overdue']
+        : ['label' => 'Vaccinated', 'class' => 'vet-pill-updated'];
     $pet['age'] = calculate_age($pet['dob']);
     $pets[] = $pet;
 }
@@ -209,8 +212,8 @@ if (!empty($filter_vaccine)) {
                                     </div>
                                 </td>
                                 <td>
-                                    <span class="vet-pill <?= $pet['vaccine_status']['class'] ?>">
-                                        <?= $pet['vaccine_status']['label'] ?>
+                                    <span class="vet-pill <?= $pet['vaccination_display']['class'] ?>">
+                                        <?= $pet['vaccination_display']['label'] ?>
                                     </span>
                                 </td>
                                 <td>
