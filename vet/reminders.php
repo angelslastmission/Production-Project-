@@ -44,15 +44,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $vet_id > 0) {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'send_all') {
-        $update_query = mysqli_query(
+        $pending_result = mysqli_query(
             $conn,
-            "UPDATE reminders SET status = 'sent', sent_at = NOW() WHERE vet_id = $vet_id AND status = 'pending'"
+            "SELECT COUNT(*) AS total_pending FROM reminders WHERE vet_id = $vet_id AND status = 'pending'"
         );
 
-        if ($update_query) {
-            $success = 'All pending reminders marked as sent.';
+        $pending_row = $pending_result ? mysqli_fetch_assoc($pending_result) : null;
+        $pending_count = (int)($pending_row['total_pending'] ?? 0);
+
+        if ($pending_count <= 0) {
+            $error = 'There are no pending reminders to send.';
         } else {
-            $error = 'Database error: ' . mysqli_error($conn);
+            $update_query = mysqli_query(
+                $conn,
+                "UPDATE reminders SET status = 'sent', sent_at = NOW() WHERE vet_id = $vet_id AND status = 'pending'"
+            );
+
+            if ($update_query) {
+                $success = 'All pending reminders marked as sent.';
+            } else {
+                $error = 'Database error: ' . mysqli_error($conn);
+            }
         }
     } else {
         $form_data['pet_id'] = (int)($_POST['pet_id'] ?? 0);
