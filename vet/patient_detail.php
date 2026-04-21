@@ -24,6 +24,7 @@ $pet = null;
 $pet_stmt = mysqli_prepare(
     $conn,
     "SELECT p.id, p.name, p.species, p.breed, p.gender, p.dob, p.weight, p.status, p.allergies, p.last_visit,
+            p.vaccination_status, p.vaccination_type, p.deworming_status, p.deworming_type,
             CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) AS owner_name,
             u.email AS owner_email,
             u.phone AS owner_phone
@@ -63,6 +64,13 @@ $deworming_form = [
     'notes' => ''
 ];
 
+$status_form = [
+    'vaccination_status' => $pet['vaccination_status'] ?? 'not-vaccinated',
+    'vaccination_type' => $pet['vaccination_type'] ?? '',
+    'deworming_status' => $pet['deworming_status'] ?? 'not-dewormed',
+    'deworming_type' => $pet['deworming_type'] ?? ''
+];
+
 $vaccine_catalog = [
     'Dog' => ['Rabies', 'DHPP', 'Parvovirus', 'Leptospirosis', 'Bordetella', 'Canine Influenza'],
     'Cat' => ['Rabies', 'FVRCP', 'FeLV', 'Chlamydia', 'Bordetella'],
@@ -81,6 +89,55 @@ $deworming_catalog = [
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = trim($_POST['form_action'] ?? '');
+
+    if ($action === 'update_statuses') {
+        $status_form['vaccination_status'] = trim($_POST['vaccination_status'] ?? 'not-vaccinated');
+        $status_form['vaccination_type'] = trim($_POST['vaccination_type'] ?? '');
+        $status_form['deworming_status'] = trim($_POST['deworming_status'] ?? 'not-dewormed');
+        $status_form['deworming_type'] = trim($_POST['deworming_type'] ?? '');
+
+        $allowed_vaccination_status = ['vaccinated', 'not-vaccinated'];
+        $allowed_deworming_status = ['dewormed', 'not-dewormed'];
+
+        if (!in_array($status_form['vaccination_status'], $allowed_vaccination_status, true)) {
+            $error = 'Invalid vaccination status selected.';
+        } elseif (!in_array($status_form['deworming_status'], $allowed_deworming_status, true)) {
+            $error = 'Invalid deworming status selected.';
+        }
+
+        if ($error === '') {
+            if ($status_form['vaccination_status'] === 'not-vaccinated') {
+                $status_form['vaccination_type'] = '';
+            }
+            if ($status_form['deworming_status'] === 'not-dewormed') {
+                $status_form['deworming_type'] = '';
+            }
+
+            $vaccination_status = mysqli_real_escape_string($conn, $status_form['vaccination_status']);
+            $vaccination_type = $status_form['vaccination_type'] !== '' ? "'" . mysqli_real_escape_string($conn, $status_form['vaccination_type']) . "'" : 'NULL';
+            $deworming_status = mysqli_real_escape_string($conn, $status_form['deworming_status']);
+            $deworming_type = $status_form['deworming_type'] !== '' ? "'" . mysqli_real_escape_string($conn, $status_form['deworming_type']) . "'" : 'NULL';
+
+            $update_status_query = "
+                UPDATE pets
+                SET vaccination_status = '$vaccination_status',
+                    vaccination_type = $vaccination_type,
+                    deworming_status = '$deworming_status',
+                    deworming_type = $deworming_type
+                WHERE id = $pet_id AND vet_id = $vet_id
+            ";
+
+            if (mysqli_query($conn, $update_status_query)) {
+                $success = 'Patient status updated successfully.';
+                $pet['vaccination_status'] = $status_form['vaccination_status'];
+                $pet['vaccination_type'] = $status_form['vaccination_type'];
+                $pet['deworming_status'] = $status_form['deworming_status'];
+                $pet['deworming_type'] = $status_form['deworming_type'];
+            } else {
+                $error = 'Database error: ' . mysqli_error($conn);
+            }
+        }
+    }
 
     if ($action === 'add_vaccination') {
         $vaccination_form['vaccine_name'] = trim($_POST['vaccine_name'] ?? '');
@@ -102,21 +159,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($error === '') {
-            $vaccine_name = mysqli_real_escape_string($conn, $vaccination_form['vaccine_name']);
-            $date_given = mysqli_real_escape_string($conn, $vaccination_form['date_given']);
-            $next_due_date = $vaccination_form['next_due_date'] !== '' ? "'" . mysqli_real_escape_string($conn, $vaccination_form['next_due_date']) . "'" : 'NULL';
-            $dose_number = $vaccination_form['dose_number'] !== '' ? "'" . mysqli_real_escape_string($conn, $vaccination_form['dose_number']) . "'" : 'NULL';
-            $batch_number = $vaccination_form['batch_number'] !== '' ? "'" . mysqli_real_escape_string($conn, $vaccination_form['batch_number']) . "'" : 'NULL';
-            $notes = $vaccination_form['notes'] !== '' ? "'" . mysqli_real_escape_string($conn, $vaccination_form['notes']) . "'" : 'NULL';
+            $vac_stmt = mysqli_prepare(
+                $conn,
+                "INSERT INTO vaccinations (pet_id, vet_id, vaccine_name, date_given, next_due_date, dose_number, batch_number, notes, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())"
+            );
 
-            $insert = "
-                INSERT INTO vaccinations (pet_id, vet_id, vaccine_name, date_given, next_due_date, dose_number, batch_number, notes, created_at)
-                VALUES ($pet_id, $vet_id, '$vaccine_name', '$date_given', $next_due_date, $dose_number, $batch_number, $notes, NOW())
-            ";
+            if ($vac_stmt) {
+                $next_due = $vaccination_form['next_due_date'] !== '' ? $vaccination_form['next_due_date'] : null;
+                $dose_num = $vaccination_form['dose_number'] !== '' ? $vaccination_form['dose_number'] : null;
+                $batch_num = $vaccination_form['batch_number'] !== '' ? $vaccination_form['batch_number'] : null;
+                $notes_val = $vaccination_form['notes'] !== '' ? $vaccination_form['notes'] : null;
 
-            if (mysqli_query($conn, $insert)) {
-                $success = 'Vaccination record saved.';
-                $vaccination_form = ['vaccine_name' => '', 'date_given' => '', 'next_due_date' => '', 'dose_number' => '', 'batch_number' => '', 'notes' => ''];
+                mysqli_stmt_bind_param(
+                    $vac_stmt,
+                    'iisssss',
+                    $pet_id,
+                    $vet_id,
+                    $vaccination_form['vaccine_name'],
+                    $vaccination_form['date_given'],
+                    $next_due,
+                    $dose_num,
+                    $batch_num,
+                    $notes_val
+                );
+
+                if (mysqli_stmt_execute($vac_stmt)) {
+                    $success = 'Vaccination record saved.';
+                    $vaccination_form = ['vaccine_name' => '', 'date_given' => '', 'next_due_date' => '', 'dose_number' => '', 'batch_number' => '', 'notes' => ''];
+                } else {
+                    $error = 'Database error: ' . mysqli_stmt_error($vac_stmt);
+                }
+                mysqli_stmt_close($vac_stmt);
             } else {
                 $error = 'Database error: ' . mysqli_error($conn);
             }
@@ -137,20 +211,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($error === '') {
-            $product_name = mysqli_real_escape_string($conn, $deworming_form['product_name']);
-            $date_given = mysqli_real_escape_string($conn, $deworming_form['date_given']);
-            $next_due_date = $deworming_form['next_due_date'] !== '' ? "'" . mysqli_real_escape_string($conn, $deworming_form['next_due_date']) . "'" : 'NULL';
-            $dose = $deworming_form['dose'] !== '' ? "'" . mysqli_real_escape_string($conn, $deworming_form['dose']) . "'" : 'NULL';
-            $notes = $deworming_form['notes'] !== '' ? "'" . mysqli_real_escape_string($conn, $deworming_form['notes']) . "'" : 'NULL';
+            $dew_stmt = mysqli_prepare(
+                $conn,
+                "INSERT INTO dewormings (pet_id, vet_id, product_name, date_given, next_due_date, dose, notes, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, NOW())"
+            );
 
-            $insert = "
-                INSERT INTO dewormings (pet_id, vet_id, product_name, date_given, next_due_date, dose, notes, created_at)
-                VALUES ($pet_id, $vet_id, '$product_name', '$date_given', $next_due_date, $dose, $notes, NOW())
-            ";
+            if ($dew_stmt) {
+                $next_due = $deworming_form['next_due_date'] !== '' ? $deworming_form['next_due_date'] : null;
+                $dose_val = $deworming_form['dose'] !== '' ? $deworming_form['dose'] : null;
+                $notes_val = $deworming_form['notes'] !== '' ? $deworming_form['notes'] : null;
 
-            if (mysqli_query($conn, $insert)) {
-                $success = 'Deworming record saved.';
-                $deworming_form = ['product_name' => '', 'date_given' => '', 'next_due_date' => '', 'dose' => '', 'notes' => ''];
+                mysqli_stmt_bind_param(
+                $dew_stmt,
+                'iisssss',
+                    $pet_id,
+                    $vet_id,
+                    $deworming_form['product_name'],
+                    $deworming_form['date_given'],
+                    $next_due,
+                    $dose_val,
+                    $notes_val
+                );
+
+                if (mysqli_stmt_execute($dew_stmt)) {
+                    $success = 'Deworming record saved.';
+                    $deworming_form = ['product_name' => '', 'date_given' => '', 'next_due_date' => '', 'dose' => '', 'notes' => ''];
+                } else {
+                    $error = 'Database error: ' . mysqli_stmt_error($dew_stmt);
+                }
+                mysqli_stmt_close($dew_stmt);
             } else {
                 $error = 'Database error: ' . mysqli_error($conn);
             }
@@ -198,6 +288,14 @@ if ($dewormings_stmt) {
 
 $vaccinated = count($vaccinations) > 0;
 $dewormed = count($dewormings) > 0;
+
+$vaccination_display = $pet['vaccination_status'] === 'vaccinated'
+    ? ['label' => 'Vaccinated', 'class' => 'vet-pill-updated']
+    : ['label' => 'Not vaccinated', 'class' => 'vet-pill-overdue'];
+
+$deworming_display = $pet['deworming_status'] === 'dewormed'
+    ? ['label' => 'Dewormed', 'class' => 'vet-pill-updated']
+    : ['label' => 'Not dewormed', 'class' => 'vet-pill-soon'];
 
 function get_age_label($dob)
 {
@@ -271,10 +369,47 @@ $pet_age = get_age_label($pet['dob']);
                     <div class="col-md-6"><strong>Owner phone/email:</strong> <?= htmlspecialchars(trim((string)$pet['owner_phone']) !== '' ? trim((string)$pet['owner_phone']) : 'N/A') ?> / <?= htmlspecialchars(trim((string)$pet['owner_email']) !== '' ? trim((string)$pet['owner_email']) : 'N/A') ?></div>
                 </div>
                 <div class="mt-3 d-flex gap-2 flex-wrap">
-                    <span class="vet-pill <?= $vaccinated ? 'vet-pill-updated' : 'vet-pill-overdue' ?>"><?= $vaccinated ? 'Vaccinated' : 'Not vaccinated' ?></span>
-                    <span class="vet-pill <?= $dewormed ? 'vet-pill-updated' : 'vet-pill-soon' ?>"><?= $dewormed ? 'Dewormed' : 'No deworming record' ?></span>
+                    <span class="vet-pill <?= $vaccination_display['class'] ?>"><?= htmlspecialchars($vaccination_display['label']) ?></span>
+                    <span class="vet-pill <?= $deworming_display['class'] ?>"><?= htmlspecialchars($deworming_display['label']) ?></span>
                 </div>
             </div>
+        </section>
+
+        <section class="vet-panel mb-3">
+            <div class="vet-panel-header">
+                <h3 class="vet-panel-title">Vaccination and deworming status</h3>
+            </div>
+            <form method="POST" class="p-3 p-md-4">
+                <input type="hidden" name="form_action" value="update_statuses">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label small text-secondary">Vaccination status</label>
+                        <select name="vaccination_status" class="form-select">
+                            <option value="vaccinated" <?= ($pet['vaccination_status'] ?? '') === 'vaccinated' ? 'selected' : '' ?>>Vaccinated</option>
+                            <option value="not-vaccinated" <?= ($pet['vaccination_status'] ?? '') !== 'vaccinated' ? 'selected' : '' ?>>Not vaccinated</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-secondary">Vaccination type</label>
+                        <input type="text" name="vaccination_type" class="form-control" value="<?= htmlspecialchars($pet['vaccination_type'] ?? '') ?>" placeholder="Rabies, DHPP, etc.">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-secondary">Deworming status</label>
+                        <select name="deworming_status" class="form-select">
+                            <option value="dewormed" <?= ($pet['deworming_status'] ?? '') === 'dewormed' ? 'selected' : '' ?>>Dewormed</option>
+                            <option value="not-dewormed" <?= ($pet['deworming_status'] ?? '') !== 'dewormed' ? 'selected' : '' ?>>Not dewormed</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-secondary">Deworming type</label>
+                        <input type="text" name="deworming_type" class="form-control" value="<?= htmlspecialchars($pet['deworming_type'] ?? '') ?>" placeholder="Pyrantel, Fenbendazole, etc.">
+                    </div>
+                </div>
+                <div class="mt-3 d-flex gap-2">
+                    <button type="submit" class="vet-alert-btn">SAVE</button>
+                    <button type="reset" class="patients-view-btn">Clear</button>
+                </div>
+            </form>
         </section>
 
         <section class="vet-data-grid">
