@@ -156,11 +156,11 @@ if ($followups_panel_stmt) {
 
 $hour = (int)date('H');
 if ($hour < 12) {
-    $greeting = 'Good morning';
+    $greeting = 'Good Morning';
 } elseif ($hour < 17) {
-    $greeting = 'Good afternoon';
+    $greeting = 'Good Afternoon';
 } else {
-    $greeting = 'Good evening';
+    $greeting = 'Good Evening';
 }
 ?>
 <!DOCTYPE html>
@@ -185,7 +185,7 @@ if ($hour < 12) {
         </div>
 
         <section class="vet-greeting">
-            <h1><?= $greeting ?>, <?= htmlspecialchars($_SESSION['user_name']) ?> 👋</h1>
+            <h1><?= $greeting ?>, <?= htmlspecialchars($_SESSION['user_name']) ?></h1>
             <p><?= htmlspecialchars(date('l, j F Y')) ?> | <?= htmlspecialchars($_SESSION['clinic_name'] ?? 'Animal Care Clinic') ?></p>
         </section>
 
@@ -215,17 +215,17 @@ if ($hour < 12) {
                 <div class="vet-stat-number"><?= (int)$stats['pets'] ?></div>
                 <div class="vet-stat-label">Total patients</div>
             </a>
-            <a href="vaccinations.php" class="vet-stat-card vet-stat-link" aria-label="View due vaccinations this week">
-                <div class="vet-stat-icon"><i class="bi bi-calendar3"></i></div>
+            <a href="vaccinations.php?view=due_week" class="vet-stat-card vet-stat-link" aria-label="View due vaccinations this week">
+                <div class="vet-stat-icon"><i class="bi bi-shield-check"></i></div>
                 <div class="vet-stat-number"><?= (int)$due_this_week ?></div>
                 <div class="vet-stat-label">Due this week (Action needed)</div>
             </a>
-            <a href="vaccinations.php" class="vet-stat-card vet-stat-link" aria-label="View overdue vaccines">
-                <div class="vet-stat-icon"><i class="bi bi-exclamation-lg"></i></div>
+            <a href="vaccinations.php?view=overdue" class="vet-stat-card vet-stat-link" aria-label="View overdue vaccines">
+                <div class="vet-stat-icon"><i class="bi bi-shield-exclamation"></i></div>
                 <div class="vet-stat-number"><?= (int)$overdue_count ?></div>
                 <div class="vet-stat-label">Overdue vaccines (Urgent)</div>
             </a>
-            <a href="treatments.php" class="vet-stat-card vet-stat-link" aria-label="View follow-up treatments">
+            <a href="treatments.php?view=followups" class="vet-stat-card vet-stat-link" aria-label="View follow-up treatments">
                 <div class="vet-stat-icon"><i class="bi bi-arrow-counterclockwise"></i></div>
                 <div class="vet-stat-number"><?= (int)$followups_pending ?></div>
                 <div class="vet-stat-label">Follow-ups pending (Review)</div>

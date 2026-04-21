@@ -218,9 +218,13 @@ body {
     min-height: 110px;
 }
 
-.vet-stat-link {
+.vet-stat-link,
+.vet-stat-link:visited,
+.vet-stat-link:active,
+.vet-stat-link:hover,
+.vet-stat-link:focus {
     display: block;
-    text-decoration: none;
+    text-decoration: none !important;
     color: inherit;
     transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
@@ -234,6 +238,14 @@ body {
 .vet-stat-link:focus-visible {
     outline: 2px solid #0d9488;
     outline-offset: 2px;
+}
+
+.vet-stat-link *,
+.vet-stat-link *:visited,
+.vet-stat-link *:active,
+.vet-stat-link *:hover,
+.vet-stat-link *:focus {
+    text-decoration: none !important;
 }
 
 .vet-stat-icon {

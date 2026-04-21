@@ -6,6 +6,12 @@ include 'includes/auth.php';
 $active_page = 'vaccinations';
 $success = '';
 $error = '';
+$view_mode = trim($_GET['view'] ?? 'all');
+$allowed_view_modes = ['all', 'due_week', 'overdue'];
+if (!in_array($view_mode, $allowed_view_modes, true)) {
+    $view_mode = 'all';
+}
+$quick_view_mode = $view_mode !== 'all';
 
 $vet_id = (int)($_SESSION['user_id'] ?? 0);
 if ($vet_id <= 0) {
@@ -128,13 +134,20 @@ $vaccinations = [];
 $today = new DateTime(date('Y-m-d'));
 
 if ($vet_id > 0) {
+    $list_where = "v.vet_id = $vet_id";
+    if ($view_mode === 'due_week') {
+        $list_where .= " AND v.next_due_date IS NOT NULL AND v.next_due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)";
+    } elseif ($view_mode === 'overdue') {
+        $list_where .= " AND v.next_due_date IS NOT NULL AND v.next_due_date < CURDATE()";
+    }
+
     $vaccination_query = mysqli_query(
         $conn,
         "SELECT v.id, v.vaccine_name, v.date_given, v.next_due_date, v.dose_number,
                 p.name AS pet_name, p.species
          FROM vaccinations v
          JOIN pets p ON v.pet_id = p.id
-         WHERE v.vet_id = $vet_id
+         WHERE $list_where
          ORDER BY v.date_given DESC, v.id DESC"
     );
 
@@ -164,6 +177,13 @@ function get_due_status($next_due_date)
     }
 
     return ['label' => 'Up to date', 'class' => 'vet-pill-updated'];
+}
+
+$records_title = 'Vaccination records';
+if ($view_mode === 'due_week') {
+    $records_title = 'Due this week - vaccination list';
+} elseif ($view_mode === 'overdue') {
+    $records_title = 'Overdue - vaccination list';
 }
 ?>
 <!DOCTYPE html>
@@ -201,9 +221,10 @@ function get_due_status($next_due_date)
         </div>
         <?php endif; ?>
 
+        <?php if (!$quick_view_mode): ?>
         <section class="vet-panel mb-3">
             <div class="vet-panel-header">
-                <h3 class="vet-panel-title">Add vaccination</h3>
+                <h3 class="vet-panel-title"><i class="bi bi-shield-plus me-2"></i>Add vaccination</h3>
             </div>
             <form method="POST" class="p-3 p-md-4">
                 <div class="row g-3">
@@ -255,10 +276,11 @@ function get_due_status($next_due_date)
                 </div>
             </form>
         </section>
+        <?php endif; ?>
 
         <section class="vet-panel">
             <div class="vet-panel-header">
-                <h3 class="vet-panel-title">Vaccination records</h3>
+                <h3 class="vet-panel-title"><i class="bi bi-shield-check me-2"></i><?= htmlspecialchars($records_title) ?></h3>
             </div>
             <div class="table-responsive">
                 <table class="vet-panel-table">

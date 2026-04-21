@@ -6,6 +6,12 @@ include 'includes/auth.php';
 $active_page = 'treatments';
 $success = '';
 $error = '';
+$view_mode = trim($_GET['view'] ?? 'all');
+$allowed_view_modes = ['all', 'followups'];
+if (!in_array($view_mode, $allowed_view_modes, true)) {
+    $view_mode = 'all';
+}
+$quick_view_mode = $view_mode !== 'all';
 
 $vet_id = (int)($_SESSION['user_id'] ?? 0);
 if ($vet_id <= 0) {
@@ -114,13 +120,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $vet_id > 0) {
 
 $treatments = [];
 if ($vet_id > 0) {
+    $list_where = "t.vet_id = $vet_id";
+    if ($view_mode === 'followups') {
+        $list_where .= " AND t.followup_date IS NOT NULL AND t.followup_date >= CURDATE()";
+    }
+
     $treatment_query = mysqli_query(
         $conn,
         "SELECT t.id, t.diagnosis, t.treatment_date, t.followup_date, t.severity,
                 p.name AS pet_name
          FROM treatments t
          JOIN pets p ON t.pet_id = p.id
-         WHERE t.vet_id = $vet_id
+         WHERE $list_where
          ORDER BY t.treatment_date DESC, t.id DESC"
     );
 
@@ -129,6 +140,11 @@ if ($vet_id > 0) {
             $treatments[] = $row;
         }
     }
+}
+
+$records_title = 'Treatment records';
+if ($view_mode === 'followups') {
+    $records_title = 'Follow-ups pending list';
 }
 ?>
 <!DOCTYPE html>
@@ -166,9 +182,10 @@ if ($vet_id > 0) {
         </div>
         <?php endif; ?>
 
+        <?php if (!$quick_view_mode): ?>
         <section class="vet-panel mb-3">
             <div class="vet-panel-header">
-                <h3 class="vet-panel-title">New treatment case</h3>
+                <h3 class="vet-panel-title"><i class="bi bi-clipboard2-pulse me-2"></i>New treatment case</h3>
             </div>
             <form method="POST" class="p-3 p-md-4">
                 <div class="row g-3">
@@ -220,10 +237,11 @@ if ($vet_id > 0) {
                 </div>
             </form>
         </section>
+        <?php endif; ?>
 
         <section class="vet-panel">
             <div class="vet-panel-header">
-                <h3 class="vet-panel-title">Treatment records</h3>
+                <h3 class="vet-panel-title"><i class="bi bi-arrow-counterclockwise me-2"></i><?= htmlspecialchars($records_title) ?></h3>
             </div>
             <div class="table-responsive">
                 <table class="vet-panel-table">
