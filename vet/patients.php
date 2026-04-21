@@ -70,42 +70,32 @@ function calculate_age($dob) {
     }
 }
 
-// ── Helper: Get vaccine status ───────
+// ── Helper: Get vaccination status ───
 function get_vaccine_status($conn, $pet_id) {
     $vax_query = "
-        SELECT MAX(next_due_date) as latest_due
+        SELECT COUNT(*) AS total
         FROM vaccinations
         WHERE pet_id = $pet_id
-        ORDER BY next_due_date DESC
-        LIMIT 1
     ";
-    
+
     $result = mysqli_fetch_assoc(mysqli_query($conn, $vax_query));
-    
-    if (!$result || empty($result['latest_due']) || $result['latest_due'] === '0000-00-00') {
-        return ['status' => 'not-recorded', 'label' => 'Not recorded', 'class' => 'vet-pill-status'];
+    $has_vaccination = (int)($result['total'] ?? 0) > 0;
+
+    if ($has_vaccination) {
+        return ['status' => 'vaccinated', 'label' => 'Vaccinated', 'class' => 'vet-pill-updated'];
     }
-    
-    $due_date = new DateTime($result['latest_due']);
-    $today = new DateTime();
-    $interval = $today->diff($due_date);
-    
-    if ($today > $due_date) {
-        return ['status' => 'overdue', 'label' => 'Overdue', 'class' => 'vet-pill-overdue'];
-    } elseif ($interval->days <= 14) {
-        return ['status' => 'soon', 'label' => 'Due soon', 'class' => 'vet-pill-soon'];
-    } else {
-        return ['status' => 'updated', 'label' => 'Up to date', 'class' => 'vet-pill-updated'];
-    }
+
+    return ['status' => 'not-vaccinated', 'label' => 'Not vaccinated', 'class' => 'vet-pill-overdue'];
 }
 
 // ── Build pets array with processed data
 while ($pet = mysqli_fetch_assoc($pets_result)) {
     $vax_status = get_vaccine_status($conn, $pet['id']);
     $pet['vaccine_status'] = $vax_status;
-    $pet['vaccination_display'] = $vax_status['status'] === 'not-recorded'
-        ? ['label' => 'Not vaccinated', 'class' => 'vet-pill-overdue']
-        : ['label' => 'Vaccinated', 'class' => 'vet-pill-updated'];
+    $pet['vaccination_display'] = [
+        'label' => $vax_status['label'],
+        'class' => $vax_status['class']
+    ];
     $pet['age'] = calculate_age($pet['dob']);
     $pets[] = $pet;
 }
@@ -162,10 +152,8 @@ if (!empty($filter_vaccine)) {
 
             <select class="patients-select" name="vaccine_status" onchange="this.form.submit()">
                 <option value="">All vaccine statuses</option>
-                <option value="overdue" <?= $filter_vaccine === 'overdue' ? 'selected' : '' ?>>Overdue</option>
-                <option value="soon" <?= $filter_vaccine === 'soon' ? 'selected' : '' ?>>Due soon</option>
-                <option value="updated" <?= $filter_vaccine === 'updated' ? 'selected' : '' ?>>Up to date</option>
-                <option value="not-recorded" <?= $filter_vaccine === 'not-recorded' ? 'selected' : '' ?>>Not recorded</option>
+                <option value="vaccinated" <?= $filter_vaccine === 'vaccinated' ? 'selected' : '' ?>>Vaccinated</option>
+                <option value="not-vaccinated" <?= $filter_vaccine === 'not-vaccinated' ? 'selected' : '' ?>>Not vaccinated</option>
             </select>
 
             <a href="register_pet.php" class="patients-add-btn">
