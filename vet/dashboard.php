@@ -210,26 +210,26 @@ if ($hour < 12) {
         <?php endif; ?>
 
         <section class="vet-stats">
-            <article class="vet-stat-card">
+            <a href="patients.php" class="vet-stat-card vet-stat-link" aria-label="View total patients">
                 <div class="vet-stat-icon"><i class="bi bi-person-lines-fill"></i></div>
                 <div class="vet-stat-number"><?= (int)$stats['pets'] ?></div>
                 <div class="vet-stat-label">Total patients</div>
-            </article>
-            <article class="vet-stat-card">
+            </a>
+            <a href="vaccinations.php" class="vet-stat-card vet-stat-link" aria-label="View due vaccinations this week">
                 <div class="vet-stat-icon"><i class="bi bi-calendar3"></i></div>
                 <div class="vet-stat-number"><?= (int)$due_this_week ?></div>
                 <div class="vet-stat-label">Due this week (Action needed)</div>
-            </article>
-            <article class="vet-stat-card">
+            </a>
+            <a href="vaccinations.php" class="vet-stat-card vet-stat-link" aria-label="View overdue vaccines">
                 <div class="vet-stat-icon"><i class="bi bi-exclamation-lg"></i></div>
                 <div class="vet-stat-number"><?= (int)$overdue_count ?></div>
                 <div class="vet-stat-label">Overdue vaccines (Urgent)</div>
-            </article>
-            <article class="vet-stat-card">
+            </a>
+            <a href="treatments.php" class="vet-stat-card vet-stat-link" aria-label="View follow-up treatments">
                 <div class="vet-stat-icon"><i class="bi bi-arrow-counterclockwise"></i></div>
                 <div class="vet-stat-number"><?= (int)$followups_pending ?></div>
                 <div class="vet-stat-label">Follow-ups pending (Review)</div>
-            </article>
+            </a>
         </section>
 
         <section class="vet-data-grid">
