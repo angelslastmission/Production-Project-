@@ -11,14 +11,105 @@ if ($owner_id <= 0) {
     exit();
 }
 
-// Mock notifications data
-$notifications = [
-    ['pet' => 'Bruno', 'type' => 'Vaccine Reminder', 'message' => 'Bruno — Rabies booster OVERDUE', 'detail' => 'The annual rabies booster for Bruno was due 3 days ago. Please schedule an appointment immediately to remain compliant with local regulations.', 'date' => '2023-10-12', 'time' => '09:15 AM', 'channel' => 'Email Sent'],
-    ['pet' => 'Bruno', 'type' => 'Vaccine Alert', 'message' => 'Bruno — DHPP vaccine due soon', 'detail' => 'Bruno\'s DHPP (Distemper, Hepatitis, Parainfluenza and Parvovirus) combination vaccine is due in 14 days.', 'date' => '2023-10-11', 'time' => '02:30 PM', 'channel' => 'Push Notification'],
-    ['pet' => 'Luna', 'type' => 'Deworming Reminder', 'message' => 'Luna — Deworming reminder', 'detail' => 'Monthly deworming tablet for Luna. Administer with food this morning.', 'date' => '2023-10-08', 'time' => '08:00 AM', 'channel' => 'Calendar Sync'],
-    ['pet' => 'Bruno', 'type' => 'Visit Complete', 'message' => 'Bruno — Follow-up visit completed', 'detail' => 'The clinical records for Bruno\'s follow-up visit on Oct 09 have been uploaded to his profile. All vitals look normal.', 'date' => '2023-10-09', 'time' => '04:45 PM', 'channel' => 'Records Updated'],
-    ['pet' => 'Luna', 'type' => 'Vaccine Reminder', 'message' => 'Luna — Vaccination reminder', 'detail' => 'Upcoming Bordetella vaccine reminder for Luna. This is required for her boarding reservation next month.', 'date' => '2023-10-08', 'time' => '11:15 AM', 'channel' => 'Email Sent'],
-];
+$search = trim($_GET['search'] ?? '');
+$selected_pet_id = (int)($_GET['pet_id'] ?? 0);
+$type_filter = trim($_GET['type'] ?? 'all');
+$status_filter = trim($_GET['status'] ?? 'all');
+
+$notifications = [];
+$notif_conditions = ['r.owner_id = ?'];
+$notif_params = [$owner_id];
+$notif_types = 'i';
+
+if ($search !== '') {
+  $notif_conditions[] = "(p.name LIKE ? OR r.message LIKE ? OR r.reminder_type LIKE ? OR r.channel LIKE ?)";
+  $search_term = '%' . $search . '%';
+  $notif_params[] = $search_term;
+  $notif_params[] = $search_term;
+  $notif_params[] = $search_term;
+  $notif_params[] = $search_term;
+  $notif_types .= 'ssss';
+}
+
+if ($selected_pet_id > 0) {
+  $notif_conditions[] = 'r.pet_id = ?';
+  $notif_params[] = $selected_pet_id;
+  $notif_types .= 'i';
+}
+
+if ($type_filter !== '' && $type_filter !== 'all') {
+  $notif_conditions[] = 'r.reminder_type = ?';
+  $notif_params[] = $type_filter;
+  $notif_types .= 's';
+}
+
+if ($status_filter !== '' && $status_filter !== 'all') {
+  $notif_conditions[] = 'r.status = ?';
+  $notif_params[] = $status_filter;
+  $notif_types .= 's';
+}
+
+$notif_sql = "SELECT r.id, r.pet_id, r.reminder_type, r.reminder_date, r.channel, r.status, r.message, r.created_at,
+      p.name AS pet_name
+   FROM reminders r
+   JOIN pets p ON p.id = r.pet_id
+   WHERE " . implode(' AND ', $notif_conditions) . "
+   ORDER BY r.created_at DESC";
+
+$notif_stmt = mysqli_prepare($conn, $notif_sql);
+if ($notif_stmt) {
+  mysqli_stmt_bind_param($notif_stmt, $notif_types, ...$notif_params);
+  mysqli_stmt_execute($notif_stmt);
+  $notif_result = mysqli_stmt_get_result($notif_stmt);
+  while ($row = $notif_result ? mysqli_fetch_assoc($notif_result) : null) {
+    $notifications[] = $row;
+  }
+  mysqli_stmt_close($notif_stmt);
+}
+
+$pets_for_filter = [];
+$pet_filter_stmt = mysqli_prepare($conn,
+  "SELECT id, name FROM pets WHERE owner_id = ? ORDER BY name ASC");
+if ($pet_filter_stmt) {
+  mysqli_stmt_bind_param($pet_filter_stmt, 'i', $owner_id);
+  mysqli_stmt_execute($pet_filter_stmt);
+  $pet_filter_result = mysqli_stmt_get_result($pet_filter_stmt);
+  while ($row = $pet_filter_result ? mysqli_fetch_assoc($pet_filter_result) : null) {
+    $pets_for_filter[] = $row;
+  }
+  mysqli_stmt_close($pet_filter_stmt);
+}
+
+function notification_channel_label($channel) {
+  if ($channel === 'sms') {
+    return 'SMS Sent';
+  }
+  if ($channel === 'both') {
+    return 'SMS + Email';
+  }
+  return 'Email Sent';
+}
+
+function notification_title($notification) {
+  $pet_name = $notification['pet_name'] ?? 'Pet';
+  if ($notification['reminder_type'] === 'vaccination') {
+    return $pet_name . ' — Vaccination reminder';
+  }
+  if ($notification['reminder_type'] === 'deworming') {
+    return $pet_name . ' — Deworming reminder';
+  }
+  return $pet_name . ' — Follow-up reminder';
+}
+
+function notification_type_label($type) {
+  if ($type === 'vaccination') {
+    return 'Vaccination';
+  }
+  if ($type === 'deworming') {
+    return 'Deworming';
+  }
+  return 'Follow-up';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -127,38 +218,57 @@ $notifications = [
         </div>
 
         <!-- Filters -->
-        <div class="notif-filters">
-            <input type="text" placeholder="Search notifications..." style="flex: 1; padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.9rem;">
-            <select style="padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.9rem;">
-                <option>All pets</option>
-                <option>Bruno</option>
-                <option>Luna</option>
+        <form method="GET" class="notif-filters" style="flex-wrap:wrap;">
+            <input type="text" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="Search notifications..." style="flex: 1; padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.9rem; min-width: 220px;">
+            <select name="pet_id" style="padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.9rem; min-width: 180px;">
+                <option value="0">All pets</option>
+                <?php foreach ($pets_for_filter as $pet_option): ?>
+                  <option value="<?= (int)$pet_option['id'] ?>" <?= $selected_pet_id === (int)$pet_option['id'] ? 'selected' : '' ?>><?= htmlspecialchars($pet_option['name']) ?></option>
+                <?php endforeach; ?>
             </select>
-            <select style="padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.9rem;">
-                <option>All types</option>
-                <option>Vaccine Reminder</option>
-                <option>Deworming Reminder</option>
-                <option>Follow-up</option>
+            <select name="type" style="padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.9rem; min-width: 180px;">
+                <option value="all">All types</option>
+                <option value="vaccination" <?= $type_filter === 'vaccination' ? 'selected' : '' ?>>Vaccination</option>
+                <option value="deworming" <?= $type_filter === 'deworming' ? 'selected' : '' ?>>Deworming</option>
+                <option value="followup" <?= $type_filter === 'followup' ? 'selected' : '' ?>>Follow-up</option>
             </select>
-        </div>
+            <select name="status" style="padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.9rem; min-width: 160px;">
+                <option value="all">All status</option>
+                <option value="pending" <?= $status_filter === 'pending' ? 'selected' : '' ?>>Pending</option>
+                <option value="sent" <?= $status_filter === 'sent' ? 'selected' : '' ?>>Sent</option>
+                <option value="read" <?= $status_filter === 'read' ? 'selected' : '' ?>>Read</option>
+            </select>
+            <button type="submit" class="notif-filter-btn active">Filter</button>
+        </form>
 
         <!-- Notifications List -->
         <div style="background: #fff; border-radius: 8px; padding: 20px;">
             <?php foreach ($notifications as $notif): ?>
-            <div class="notif-item">
-                <div class="notif-icon"><i class="bi bi-bell-fill"></i></div>
+            <a href="pet_detail.php?id=<?= (int)$notif['pet_id'] ?>#vaccinations" class="notif-item" style="text-decoration:none; color:inherit;">
+              <div class="notif-icon">
+                <?php if ($notif['reminder_type'] === 'vaccination'): ?>
+                  <i class="bi bi-shield-check"></i>
+                <?php elseif ($notif['reminder_type'] === 'deworming'): ?>
+                  <i class="bi bi-capsule"></i>
+                <?php else: ?>
+                  <i class="bi bi-bell-fill"></i>
+                <?php endif; ?>
+              </div>
                 <div class="notif-content">
                     <div class="notif-title">
-                        <strong><?= htmlspecialchars($notif['pet']) ?> — <?= htmlspecialchars($notif['type']) ?></strong>
-                        <span style="color: #d1d5db;"><?= htmlspecialchars($notif['date']) ?>, <?= htmlspecialchars($notif['time']) ?></span>
+                  <strong><?= htmlspecialchars(notification_title($notif)) ?></strong>
+                  <span style="color: #d1d5db;"><?= htmlspecialchars(date('M d, Y', strtotime($notif['created_at']))) ?></span>
                     </div>
-                    <div style="font-weight: 700; color: #1f2937; margin-bottom: 6px; font-size: 0.95rem;"><?= htmlspecialchars($notif['message']) ?></div>
-                    <div class="notif-detail"><?= htmlspecialchars($notif['detail']) ?></div>
+                <div style="font-weight: 700; color: #1f2937; margin-bottom: 6px; font-size: 0.95rem;"><?= htmlspecialchars($notif['message'] ?: notification_title($notif)) ?></div>
+                <div class="notif-detail">
+                  <?= htmlspecialchars($notif['message'] ?: 'Reminder for ' . ($notif['pet_name'] ?? 'this pet')) ?>
+                </div>
                     <div class="notif-meta">
-                        <span class="notif-channel"><?= htmlspecialchars($notif['channel']) ?></span>
+                  <span class="notif-channel"><?= htmlspecialchars(notification_channel_label($notif['channel'])) ?></span>
+                  <span class="notif-channel"><?= htmlspecialchars(notification_type_label($notif['reminder_type'])) ?></span>
                     </div>
                 </div>
-            </div>
+            </a>
             <?php endforeach; ?>
         </div>
     </main>
