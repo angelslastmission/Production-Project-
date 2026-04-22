@@ -26,7 +26,7 @@
         <p class="vet-nav-label">HEALTH RECORDS</p>
 
         <a href="vaccinations.php" class="vet-nav-link <?= ($active_page ?? '') === 'vaccinations' ? 'active' : '' ?>">
-            <i class="bi bi-syringe"></i>
+            <i class="bi bi-shield-plus"></i>
             <span>Vaccinations</span>
         </a>
 
