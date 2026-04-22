@@ -40,7 +40,7 @@ $where_clause = !empty($where_conditions) ? 'WHERE ' . implode(' AND ', $where_c
 
 // ── Fetch all pets with owner info ───
 $pets_query = "
-    SELECT p.id, p.name, p.species, p.breed, p.dob, p.status,
+    SELECT p.id, p.name, p.species, p.breed, p.dob, p.status, p.vaccination_status, p.vaccination_type,
            u.id as owner_id, CONCAT(u.first_name, ' ', u.last_name) as owner_name,
            u.email as owner_email
     FROM pets p
@@ -70,32 +70,36 @@ function calculate_age($dob) {
     }
 }
 
-// ── Helper: Get vaccination status ───
-function get_vaccine_status($conn, $pet_id) {
-    $vax_query = "
-        SELECT COUNT(*) AS total
-        FROM vaccinations
-        WHERE pet_id = $pet_id
-    ";
-
-    $result = mysqli_fetch_assoc(mysqli_query($conn, $vax_query));
-    $has_vaccination = (int)($result['total'] ?? 0) > 0;
-
-    if ($has_vaccination) {
-        return ['status' => 'vaccinated', 'label' => 'Vaccinated', 'class' => 'vet-pill-updated'];
+function normalize_vaccination_status($status) {
+    $status = (string)$status;
+    if ($status === 'vaccinated') {
+        return 'up-to-date';
     }
 
-    return ['status' => 'not-vaccinated', 'label' => 'Not vaccinated', 'class' => 'vet-pill-overdue'];
+    $allowed = ['not-vaccinated', 'in-progress', 'up-to-date', 'overdue'];
+    return in_array($status, $allowed, true) ? $status : 'not-vaccinated';
+}
+
+function vaccination_status_display($status) {
+    $normalized = normalize_vaccination_status($status);
+
+    if ($normalized === 'up-to-date') {
+        return ['label' => 'Vaccinated (Up to date)', 'class' => 'vet-pill-updated'];
+    }
+    if ($normalized === 'in-progress') {
+        return ['label' => 'Vaccination in progress', 'class' => 'vet-pill-soon'];
+    }
+    if ($normalized === 'overdue') {
+        return ['label' => 'Booster overdue', 'class' => 'vet-pill-overdue'];
+    }
+
+    return ['label' => 'Not vaccinated', 'class' => 'vet-pill-overdue'];
 }
 
 // ── Build pets array with processed data
 while ($pet = mysqli_fetch_assoc($pets_result)) {
-    $vax_status = get_vaccine_status($conn, $pet['id']);
-    $pet['vaccine_status'] = $vax_status;
-    $pet['vaccination_display'] = [
-        'label' => $vax_status['label'],
-        'class' => $vax_status['class']
-    ];
+    $pet['vaccination_status'] = normalize_vaccination_status($pet['vaccination_status'] ?? 'not-vaccinated');
+    $pet['vaccination_display'] = vaccination_status_display($pet['vaccination_status']);
     $pet['age'] = calculate_age($pet['dob']);
     $pets[] = $pet;
 }
@@ -103,7 +107,7 @@ while ($pet = mysqli_fetch_assoc($pets_result)) {
 // ── Apply vaccine status filter ──────
 if (!empty($filter_vaccine)) {
     $pets = array_filter($pets, function($pet) use ($filter_vaccine) {
-        return $pet['vaccine_status']['status'] === $filter_vaccine;
+        return normalize_vaccination_status($pet['vaccination_status'] ?? 'not-vaccinated') === $filter_vaccine;
     });
 }
 
@@ -152,8 +156,10 @@ if (!empty($filter_vaccine)) {
 
             <select class="patients-select" name="vaccine_status" onchange="this.form.submit()">
                 <option value="">All vaccine statuses</option>
-                <option value="vaccinated" <?= $filter_vaccine === 'vaccinated' ? 'selected' : '' ?>>Vaccinated</option>
                 <option value="not-vaccinated" <?= $filter_vaccine === 'not-vaccinated' ? 'selected' : '' ?>>Not vaccinated</option>
+                <option value="in-progress" <?= $filter_vaccine === 'in-progress' ? 'selected' : '' ?>>Vaccination in progress</option>
+                <option value="up-to-date" <?= $filter_vaccine === 'up-to-date' ? 'selected' : '' ?>>Vaccinated (Up to date)</option>
+                <option value="overdue" <?= $filter_vaccine === 'overdue' ? 'selected' : '' ?>>Booster overdue</option>
             </select>
 
             <a href="register_pet.php" class="patients-add-btn">

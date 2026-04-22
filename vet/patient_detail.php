@@ -65,7 +65,7 @@ $deworming_form = [
 ];
 
 $status_form = [
-    'vaccination_status' => $pet['vaccination_status'] ?? 'not-vaccinated',
+    'vaccination_status' => ($pet['vaccination_status'] ?? '') === 'vaccinated' ? 'up-to-date' : ($pet['vaccination_status'] ?? 'not-vaccinated'),
     'vaccination_type' => $pet['vaccination_type'] ?? '',
     'deworming_status' => $pet['deworming_status'] ?? 'not-dewormed',
     'deworming_type' => $pet['deworming_type'] ?? ''
@@ -87,6 +87,36 @@ $deworming_catalog = [
     'Hamster' => ['Fenbendazole']
 ];
 
+function normalize_vaccination_status($status)
+{
+    $status = (string)$status;
+    if ($status === 'vaccinated') {
+        return 'up-to-date';
+    }
+
+    $allowed = ['not-vaccinated', 'in-progress', 'up-to-date', 'overdue'];
+    return in_array($status, $allowed, true) ? $status : 'not-vaccinated';
+}
+
+function vaccination_status_display($status)
+{
+    $normalized = normalize_vaccination_status($status);
+
+    if ($normalized === 'up-to-date') {
+        return ['label' => 'Vaccinated (Up to date)', 'class' => 'vet-pill-updated'];
+    }
+    if ($normalized === 'in-progress') {
+        return ['label' => 'Vaccination in progress', 'class' => 'vet-pill-soon'];
+    }
+    if ($normalized === 'overdue') {
+        return ['label' => 'Booster overdue', 'class' => 'vet-pill-overdue'];
+    }
+
+    return ['label' => 'Not vaccinated', 'class' => 'vet-pill-overdue'];
+}
+
+$pet['vaccination_status'] = normalize_vaccination_status($pet['vaccination_status'] ?? 'not-vaccinated');
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = trim($_POST['form_action'] ?? '');
 
@@ -96,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $status_form['deworming_status'] = trim($_POST['deworming_status'] ?? 'not-dewormed');
         $status_form['deworming_type'] = trim($_POST['deworming_type'] ?? '');
 
-        $allowed_vaccination_status = ['vaccinated', 'not-vaccinated'];
+        $allowed_vaccination_status = ['not-vaccinated', 'in-progress', 'up-to-date', 'overdue'];
         $allowed_deworming_status = ['dewormed', 'not-dewormed'];
 
         if (!in_array($status_form['vaccination_status'], $allowed_vaccination_status, true)) {
@@ -173,7 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 mysqli_stmt_bind_param(
                     $vac_stmt,
-                    'iisssss',
+                    'iissssss',
                     $pet_id,
                     $vet_id,
                     $vaccination_form['vaccine_name'],
@@ -185,7 +215,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
 
                 if (mysqli_stmt_execute($vac_stmt)) {
-                    $success = 'Vaccination record saved.';
+                    $new_vaccination_status = 'up-to-date';
+                    if ($next_due !== null) {
+                        $today = date('Y-m-d');
+                        $new_vaccination_status = ($next_due < $today) ? 'overdue' : 'in-progress';
+                    }
+
+                    $status_update_stmt = mysqli_prepare(
+                        $conn,
+                        "UPDATE pets
+                         SET vaccination_status = ?, vaccination_type = ?
+                         WHERE id = ? AND vet_id = ?"
+                    );
+
+                    if ($status_update_stmt) {
+                        $latest_vaccine = $vaccination_form['vaccine_name'];
+                        mysqli_stmt_bind_param($status_update_stmt, 'ssii', $new_vaccination_status, $latest_vaccine, $pet_id, $vet_id);
+                        mysqli_stmt_execute($status_update_stmt);
+                        mysqli_stmt_close($status_update_stmt);
+
+                        $pet['vaccination_status'] = $new_vaccination_status;
+                        $pet['vaccination_type'] = $latest_vaccine;
+                    }
+
+                    $success = 'Vaccination record saved. Vaccination status updated automatically.';
                     $vaccination_form = ['vaccine_name' => '', 'date_given' => '', 'next_due_date' => '', 'dose_number' => '', 'batch_number' => '', 'notes' => ''];
                 } else {
                     $error = 'Database error: ' . mysqli_stmt_error($vac_stmt);
@@ -289,9 +342,7 @@ if ($dewormings_stmt) {
 $vaccinated = count($vaccinations) > 0;
 $dewormed = count($dewormings) > 0;
 
-$vaccination_display = $pet['vaccination_status'] === 'vaccinated'
-    ? ['label' => 'Vaccinated', 'class' => 'vet-pill-updated']
-    : ['label' => 'Not vaccinated', 'class' => 'vet-pill-overdue'];
+$vaccination_display = vaccination_status_display($pet['vaccination_status'] ?? 'not-vaccinated');
 
 $deworming_display = $pet['deworming_status'] === 'dewormed'
     ? ['label' => 'Dewormed', 'class' => 'vet-pill-updated']
@@ -385,8 +436,10 @@ $pet_age = get_age_label($pet['dob']);
                     <div class="col-md-3">
                         <label class="form-label small text-secondary">Vaccination status</label>
                         <select name="vaccination_status" class="form-select">
-                            <option value="vaccinated" <?= ($pet['vaccination_status'] ?? '') === 'vaccinated' ? 'selected' : '' ?>>Vaccinated</option>
-                            <option value="not-vaccinated" <?= ($pet['vaccination_status'] ?? '') !== 'vaccinated' ? 'selected' : '' ?>>Not vaccinated</option>
+                            <option value="not-vaccinated" <?= ($pet['vaccination_status'] ?? '') === 'not-vaccinated' ? 'selected' : '' ?>>Not vaccinated</option>
+                            <option value="in-progress" <?= ($pet['vaccination_status'] ?? '') === 'in-progress' ? 'selected' : '' ?>>Vaccination in progress</option>
+                            <option value="up-to-date" <?= ($pet['vaccination_status'] ?? '') === 'up-to-date' ? 'selected' : '' ?>>Vaccinated (Up to date)</option>
+                            <option value="overdue" <?= ($pet['vaccination_status'] ?? '') === 'overdue' ? 'selected' : '' ?>>Booster overdue</option>
                         </select>
                     </div>
                     <div class="col-md-3">
