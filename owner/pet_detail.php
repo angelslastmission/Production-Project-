@@ -17,33 +17,75 @@ if ($pet_id <= 0) {
     exit();
 }
 
-// Mock pet data for frontend
-$pet = [
-    'id' => 1,
-    'name' => 'Bruno',
-    'species' => 'Dog',
-    'breed' => 'Labrador',
-    'gender' => 'Male',
-    'dob' => '2020-05-14',
-    'weight' => '28 kg',
-    'status' => 'HEALTHY',
-    'allergies' => 'None',
-    'last_visit' => '2023-10-15',
-    'vaccination_status' => 'overdue',
-];
+$pet = null;
+$pet_stmt = mysqli_prepare($conn,
+    "SELECT p.id, p.name, p.species, p.breed, p.gender, p.dob, p.weight, p.status,
+            p.allergies, p.last_visit, p.vet_id,
+            CONCAT(v.first_name, ' ', v.last_name) AS vet_name,
+            v.clinic_name
+     FROM pets p
+     LEFT JOIN users v ON v.id = p.vet_id AND v.role = 'vet'
+     WHERE p.id = ? AND p.owner_id = ?");
+if ($pet_stmt) {
+    mysqli_stmt_bind_param($pet_stmt, 'ii', $pet_id, $owner_id);
+    mysqli_stmt_execute($pet_stmt);
+    $pet_result = mysqli_stmt_get_result($pet_stmt);
+    $pet = $pet_result ? mysqli_fetch_assoc($pet_result) : null;
+    mysqli_stmt_close($pet_stmt);
+}
 
-$vaccinations = [
-    ['vaccine_name' => 'Rabies', 'date_given' => '2022-09-15', 'next_due_date' => '2023-10-15', 'dose_number' => '1'],
-    ['vaccine_name' => 'DHPP', 'date_given' => '2022-09-15', 'next_due_date' => '2023-09-15', 'dose_number' => '1'],
-];
+if (!$pet) {
+    header('Location: dashboard.php');
+    exit();
+}
 
-$dewormings = [
-    ['product_name' => 'Pyrantel', 'date_given' => '2023-08-20', 'next_due_date' => '2024-02-20', 'dose' => '1 tablet'],
-];
+$vaccinations = [];
+$vacc_stmt = mysqli_prepare($conn,
+    "SELECT vaccine_name, date_given, next_due_date, dose_number, batch_number, notes
+     FROM vaccinations
+     WHERE pet_id = ?
+     ORDER BY date_given DESC");
+if ($vacc_stmt) {
+    mysqli_stmt_bind_param($vacc_stmt, 'i', $pet_id);
+    mysqli_stmt_execute($vacc_stmt);
+    $vacc_result = mysqli_stmt_get_result($vacc_stmt);
+    while ($row = $vacc_result ? mysqli_fetch_assoc($vacc_result) : null) {
+        $vaccinations[] = $row;
+    }
+    mysqli_stmt_close($vacc_stmt);
+}
 
-$treatments = [
-    ['treatment_name' => 'Follow-up visit', 'date_given' => '2023-10-15', 'next_due_date' => '2024-01-15', 'notes' => 'Post-vaccination check-up'],
-];
+$dewormings = [];
+$deworm_stmt = mysqli_prepare($conn,
+    "SELECT product_name, date_given, next_due_date, dose, notes
+     FROM dewormings
+     WHERE pet_id = ?
+     ORDER BY date_given DESC");
+if ($deworm_stmt) {
+    mysqli_stmt_bind_param($deworm_stmt, 'i', $pet_id);
+    mysqli_stmt_execute($deworm_stmt);
+    $deworm_result = mysqli_stmt_get_result($deworm_stmt);
+    while ($row = $deworm_result ? mysqli_fetch_assoc($deworm_result) : null) {
+        $dewormings[] = $row;
+    }
+    mysqli_stmt_close($deworm_stmt);
+}
+
+$treatments = [];
+$treat_stmt = mysqli_prepare($conn,
+    "SELECT diagnosis, treatment, treatment_date, followup_date, severity, notes
+     FROM treatments
+     WHERE pet_id = ?
+     ORDER BY treatment_date DESC");
+if ($treat_stmt) {
+    mysqli_stmt_bind_param($treat_stmt, 'i', $pet_id);
+    mysqli_stmt_execute($treat_stmt);
+    $treat_result = mysqli_stmt_get_result($treat_stmt);
+    while ($row = $treat_result ? mysqli_fetch_assoc($treat_result) : null) {
+        $treatments[] = $row;
+    }
+    mysqli_stmt_close($treat_stmt);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -103,7 +145,7 @@ $treatments = [
             </div>
 
             <!-- Vaccinations Table -->
-            <div style="margin-top: 20px;">
+            <div id="vaccinations" style="margin-top: 20px;">
                 <div style="overflow-x: auto;">
                     <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
                         <thead>
