@@ -86,6 +86,42 @@ if ($treat_stmt) {
     }
     mysqli_stmt_close($treat_stmt);
 }
+
+$last_visit_candidates = [];
+
+$raw_last_visit = (string)($pet['last_visit'] ?? '');
+if ($raw_last_visit !== '' && $raw_last_visit !== '0000-00-00' && $raw_last_visit !== '1970-01-01') {
+    $last_visit_ts = strtotime($raw_last_visit);
+    if ($last_visit_ts !== false && $last_visit_ts > 0) {
+        $last_visit_candidates[] = $last_visit_ts;
+    }
+}
+
+if (!empty($vaccinations[0]['date_given'])) {
+    $vacc_ts = strtotime((string)$vaccinations[0]['date_given']);
+    if ($vacc_ts !== false && $vacc_ts > 0) {
+        $last_visit_candidates[] = $vacc_ts;
+    }
+}
+
+if (!empty($dewormings[0]['date_given'])) {
+    $deworm_ts = strtotime((string)$dewormings[0]['date_given']);
+    if ($deworm_ts !== false && $deworm_ts > 0) {
+        $last_visit_candidates[] = $deworm_ts;
+    }
+}
+
+if (!empty($treatments[0]['treatment_date'])) {
+    $treat_ts = strtotime((string)$treatments[0]['treatment_date']);
+    if ($treat_ts !== false && $treat_ts > 0) {
+        $last_visit_candidates[] = $treat_ts;
+    }
+}
+
+$last_visit_display = 'No visit yet';
+if (!empty($last_visit_candidates)) {
+    $last_visit_display = date('M d, Y', max($last_visit_candidates));
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -131,7 +167,7 @@ if ($treat_stmt) {
                 </div>
                 <div>
                     <div style="font-size: 0.8rem; color: #6b7280; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;">Last Visit</div>
-                    <div style="font-size: 1.25rem; font-weight: 700; color: #1f2937;"><?= date('M d, Y', strtotime($pet['last_visit'])) ?></div>
+                    <div style="font-size: 1.25rem; font-weight: 700; color: #1f2937;"><?= htmlspecialchars($last_visit_display) ?></div>
                 </div>
             </div>
         </section>

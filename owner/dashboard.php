@@ -75,6 +75,13 @@ if ($pets_stmt) {
     mysqli_stmt_close($pets_stmt);
 }
 
+$unvaccinated_pet_count = 0;
+foreach ($pets as $pet_item) {
+    if (empty($pet_item['last_vaccine'])) {
+        $unvaccinated_pet_count++;
+    }
+}
+
 // ── Fetch vaccination alerts ──────────
 $overdue_alerts = [];
 $upcoming_alerts = [];
@@ -206,6 +213,13 @@ if ($notif_stmt) {
                 <a href="notifications.php" style="color:#0d9488; font-weight:600; text-decoration:none;">View all <?= count($upcoming_alerts) ?> upcoming →</a>
             </div>
             <?php endif; ?>
+        <?php elseif ($unvaccinated_pet_count > 0): ?>
+            <section class="owner-alert" style="background:#ecfeff;border-left:4px solid #0891b2;">
+                <div class="owner-alert-text">
+                    <i class="bi bi-info-circle" style="color:#0891b2;"></i>
+                    <span style="line-height:1.4;"><?= (int)$unvaccinated_pet_count ?> pet(s) are registered but have no vaccination records yet. Please contact your veterinarian for initial vaccination entry.</span>
+                </div>
+            </section>
         <?php endif; ?>
 
         <!-- My Pets Section -->
