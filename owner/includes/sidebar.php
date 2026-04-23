@@ -24,9 +24,9 @@ $active_page = $active_page ?? 'dashboard';
             <i class="bi bi-person-circle"></i>
             <span>My Profile</span>
         </a>
-        <a href="settings.php" class="owner-nav-link <?= ($active_page === 'settings') ? 'active' : '' ?>">
+        <a href="change_password.php" class="owner-nav-link <?= ($active_page === 'change_password') ? 'active' : '' ?>">
             <i class="bi bi-gear"></i>
-            <span>Settings</span>
+            <span>Change Password</span>
         </a>
     </nav>
 
