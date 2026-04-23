@@ -14,7 +14,6 @@ if ($owner_id <= 0) {
 $search = trim($_GET['search'] ?? '');
 $selected_pet_id = (int)($_GET['pet_id'] ?? 0);
 $type_filter = trim($_GET['type'] ?? 'all');
-$status_filter = trim($_GET['status'] ?? 'all');
 
 $notifications = [];
 $notif_conditions = ['r.owner_id = ?'];
@@ -40,12 +39,6 @@ if ($selected_pet_id > 0) {
 if ($type_filter !== '' && $type_filter !== 'all') {
   $notif_conditions[] = 'r.reminder_type = ?';
   $notif_params[] = $type_filter;
-  $notif_types .= 's';
-}
-
-if ($status_filter !== '' && $status_filter !== 'all') {
-  $notif_conditions[] = 'r.status = ?';
-  $notif_params[] = $status_filter;
   $notif_types .= 's';
 }
 
@@ -231,12 +224,6 @@ function notification_type_label($type) {
                 <option value="vaccination" <?= $type_filter === 'vaccination' ? 'selected' : '' ?>>Vaccination</option>
                 <option value="deworming" <?= $type_filter === 'deworming' ? 'selected' : '' ?>>Deworming</option>
                 <option value="followup" <?= $type_filter === 'followup' ? 'selected' : '' ?>>Follow-up</option>
-            </select>
-            <select name="status" style="padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.9rem; min-width: 160px;">
-                <option value="all">All status</option>
-                <option value="pending" <?= $status_filter === 'pending' ? 'selected' : '' ?>>Pending</option>
-                <option value="sent" <?= $status_filter === 'sent' ? 'selected' : '' ?>>Sent</option>
-                <option value="read" <?= $status_filter === 'read' ? 'selected' : '' ?>>Read</option>
             </select>
             <button type="submit" class="notif-filter-btn active">Filter</button>
         </form>
