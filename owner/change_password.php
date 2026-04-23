@@ -132,36 +132,115 @@ if ($owner_name === '') {
                 <h3 class="owner-panel-title">Password Update Form</h3>
             </div>
 
-            <form method="POST" novalidate>
+            <form method="POST" novalidate id="changePasswordForm">
                 <div class="row g-3">
                     <div class="col-12">
                         <label class="form-label" style="font-weight: 600;">Current Password</label>
-                        <input type="password" name="current_password" class="form-control" required>
+                        <div class="input-group">
+                            <input type="password" id="current_password" name="current_password" class="form-control" required>
+                            <button type="button" class="btn btn-outline-secondary" id="toggleCurrentPassword" aria-label="Toggle current password visibility">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label" style="font-weight: 600;">New Password</label>
-                        <input type="password" name="new_password" class="form-control" minlength="8" required>
+                        <div class="input-group">
+                            <input type="password" id="new_password" name="new_password" class="form-control" minlength="8" required>
+                            <button type="button" class="btn btn-outline-secondary" id="toggleNewPassword" aria-label="Toggle new password visibility">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
                         <small style="color: #6b7280;">Minimum 8 characters.</small>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label" style="font-weight: 600;">Confirm New Password</label>
-                        <input type="password" name="confirm_password" class="form-control" minlength="8" required>
+                        <div class="input-group">
+                            <input type="password" id="confirm_password" name="confirm_password" class="form-control" minlength="8" required>
+                            <button type="button" class="btn btn-outline-secondary" id="toggleConfirmPassword" aria-label="Toggle confirm password visibility">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
+                <div id="passwordMismatchAlert" class="alert alert-danger mt-3 d-none" role="alert">
+                    Passwords do not match with each other.
+                </div>
+
                 <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
-                    <a href="change_password.php" class="btn btn-light">Cancel</a>
-                    <button type="submit" class="btn" style="background: #0d9488; color: #fff;">Update Password</button>
+                    <button type="reset" class="btn btn-light" id="clearPasswordBtn">Clear</button>
+                    <button type="submit" class="btn" id="updatePasswordBtn" style="background: #0d9488; color: #fff; opacity: 0.55; cursor: not-allowed;" disabled>Update Password</button>
                 </div>
             </form>
 
             <div style="margin-top: 12px; color: #6b7280; font-size: 0.9rem;">
-                Forgot your password? Use the reset option from the sign-in page.
+                Forgot your password?
+                <a href="forgot_password.php" style="color: #0d9488; font-weight: 600; text-decoration: none;">Reset here</a>.
             </div>
         </section>
     </main>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const changePasswordForm = document.getElementById('changePasswordForm');
+const currentPasswordInput = document.getElementById('current_password');
+const newPasswordInput = document.getElementById('new_password');
+const confirmPasswordInput = document.getElementById('confirm_password');
+const updatePasswordBtn = document.getElementById('updatePasswordBtn');
+const clearPasswordBtn = document.getElementById('clearPasswordBtn');
+const passwordMismatchAlert = document.getElementById('passwordMismatchAlert');
+const toggleCurrentPasswordBtn = document.getElementById('toggleCurrentPassword');
+const toggleNewPasswordBtn = document.getElementById('toggleNewPassword');
+const toggleConfirmPasswordBtn = document.getElementById('toggleConfirmPassword');
+
+function togglePasswordVisibility(input, button) {
+    const icon = button.querySelector('i');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.className = 'bi bi-eye-slash';
+    } else {
+        input.type = 'password';
+        icon.className = 'bi bi-eye';
+    }
+}
+
+function updateSubmitState() {
+    const currentVal = currentPasswordInput.value.trim();
+    const newVal = newPasswordInput.value;
+    const confirmVal = confirmPasswordInput.value;
+    const hasMismatch = newVal !== '' && confirmVal !== '' && newVal !== confirmVal;
+    const valid = currentVal !== '' && newVal.length >= 8 && confirmVal !== '' && !hasMismatch;
+
+    passwordMismatchAlert.classList.toggle('d-none', !hasMismatch);
+
+    updatePasswordBtn.disabled = !valid;
+    updatePasswordBtn.style.opacity = valid ? '1' : '0.55';
+    updatePasswordBtn.style.cursor = valid ? 'pointer' : 'not-allowed';
+}
+
+[currentPasswordInput, newPasswordInput, confirmPasswordInput].forEach(function (input) {
+    input.addEventListener('input', updateSubmitState);
+});
+
+clearPasswordBtn.addEventListener('click', function () {
+    window.setTimeout(updateSubmitState, 0);
+});
+
+toggleCurrentPasswordBtn.addEventListener('click', function () {
+    togglePasswordVisibility(currentPasswordInput, toggleCurrentPasswordBtn);
+});
+
+toggleNewPasswordBtn.addEventListener('click', function () {
+    togglePasswordVisibility(newPasswordInput, toggleNewPasswordBtn);
+});
+
+toggleConfirmPasswordBtn.addEventListener('click', function () {
+    togglePasswordVisibility(confirmPasswordInput, toggleConfirmPasswordBtn);
+});
+
+updateSubmitState();
+</script>
 </body>
 </html>
