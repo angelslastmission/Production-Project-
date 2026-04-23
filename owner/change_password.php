@@ -95,6 +95,29 @@ if ($owner_name === '') {
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
   <link href="../assets/css/owner.css" rel="stylesheet"/>
+    <style>
+        .password-toggle-wrap {
+            position: relative;
+        }
+        .password-toggle-wrap .form-control {
+            padding-right: 44px;
+        }
+        .password-toggle-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            border: none;
+            background: transparent;
+            padding: 0;
+            color: #6b7280;
+            line-height: 1;
+            cursor: pointer;
+        }
+        .password-toggle-btn:hover {
+            color: #0d9488;
+        }
+    </style>
 </head>
 <body>
 <div class="owner-layout">
@@ -136,18 +159,18 @@ if ($owner_name === '') {
                 <div class="row g-3">
                     <div class="col-12">
                         <label class="form-label" style="font-weight: 600;">Current Password</label>
-                        <div class="input-group">
+                        <div class="password-toggle-wrap">
                             <input type="password" id="current_password" name="current_password" class="form-control" required>
-                            <button type="button" class="btn btn-outline-secondary" id="toggleCurrentPassword" aria-label="Toggle current password visibility">
+                            <button type="button" class="password-toggle-btn" id="toggleCurrentPassword" aria-label="Toggle current password visibility">
                                 <i class="bi bi-eye"></i>
                             </button>
                         </div>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label" style="font-weight: 600;">New Password</label>
-                        <div class="input-group">
+                        <div class="password-toggle-wrap">
                             <input type="password" id="new_password" name="new_password" class="form-control" minlength="8" required>
-                            <button type="button" class="btn btn-outline-secondary" id="toggleNewPassword" aria-label="Toggle new password visibility">
+                            <button type="button" class="password-toggle-btn" id="toggleNewPassword" aria-label="Toggle new password visibility">
                                 <i class="bi bi-eye"></i>
                             </button>
                         </div>
@@ -155,9 +178,9 @@ if ($owner_name === '') {
                     </div>
                     <div class="col-md-6">
                         <label class="form-label" style="font-weight: 600;">Confirm New Password</label>
-                        <div class="input-group">
+                        <div class="password-toggle-wrap">
                             <input type="password" id="confirm_password" name="confirm_password" class="form-control" minlength="8" required>
-                            <button type="button" class="btn btn-outline-secondary" id="toggleConfirmPassword" aria-label="Toggle confirm password visibility">
+                            <button type="button" class="password-toggle-btn" id="toggleConfirmPassword" aria-label="Toggle confirm password visibility">
                                 <i class="bi bi-eye"></i>
                             </button>
                         </div>
