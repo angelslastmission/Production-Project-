@@ -13,8 +13,10 @@ if ($owner_id <= 0) {
 
 $success = '';
 $error = '';
+$is_edit_mode = isset($_GET['edit']) && $_GET['edit'] === '1';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $is_edit_mode = true;
     $first_name = trim($_POST['first_name'] ?? '');
     $last_name = trim($_POST['last_name'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
@@ -33,6 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (mysqli_stmt_execute($update_stmt)) {
                 $_SESSION['user_name'] = trim($first_name . ' ' . $last_name);
                 $success = 'Profile updated successfully.';
+                $is_edit_mode = false;
             } else {
                 $error = 'Unable to update profile. Please try again.';
             }
@@ -139,17 +142,22 @@ if ($owner_name === '') {
         <section class="owner-panel">
             <div class="owner-panel-header" style="margin-bottom: 12px;">
                 <h3 class="owner-panel-title">Profile Details</h3>
+                <?php if (!$is_edit_mode): ?>
+                <a href="profile.php?edit=1" class="btn" style="background: #0d9488; color: #fff;">
+                    <i class="bi bi-pencil-square" style="margin-right: 6px;"></i>Edit Profile
+                </a>
+                <?php endif; ?>
             </div>
 
             <form method="POST" novalidate>
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label" style="font-weight: 600;">First Name</label>
-                        <input type="text" name="first_name" class="form-control" required value="<?= htmlspecialchars((string)$owner_profile['first_name']) ?>">
+                        <input type="text" name="first_name" class="form-control" <?= $is_edit_mode ? '' : 'readonly' ?> required value="<?= htmlspecialchars((string)$owner_profile['first_name']) ?>">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label" style="font-weight: 600;">Last Name</label>
-                        <input type="text" name="last_name" class="form-control" required value="<?= htmlspecialchars((string)$owner_profile['last_name']) ?>">
+                        <input type="text" name="last_name" class="form-control" <?= $is_edit_mode ? '' : 'readonly' ?> required value="<?= htmlspecialchars((string)$owner_profile['last_name']) ?>">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label" style="font-weight: 600;">Email</label>
@@ -158,18 +166,20 @@ if ($owner_name === '') {
                     </div>
                     <div class="col-md-6">
                         <label class="form-label" style="font-weight: 600;">Phone</label>
-                        <input type="text" name="phone" class="form-control" value="<?= htmlspecialchars((string)$owner_profile['phone']) ?>">
+                        <input type="text" name="phone" class="form-control" <?= $is_edit_mode ? '' : 'readonly' ?> value="<?= htmlspecialchars((string)$owner_profile['phone']) ?>">
                     </div>
                     <div class="col-12">
                         <label class="form-label" style="font-weight: 600;">Address</label>
-                        <input type="text" name="address" class="form-control" value="<?= htmlspecialchars((string)$owner_profile['address']) ?>">
+                        <input type="text" name="address" class="form-control" <?= $is_edit_mode ? '' : 'readonly' ?> value="<?= htmlspecialchars((string)$owner_profile['address']) ?>">
                     </div>
                 </div>
 
+                <?php if ($is_edit_mode): ?>
                 <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
-                    <a href="dashboard.php" class="btn btn-light">Cancel</a>
+                    <a href="profile.php" class="btn btn-light">Cancel</a>
                     <button type="submit" class="btn" style="background: #0d9488; color: #fff;">Save Changes</button>
                 </div>
+                <?php endif; ?>
             </form>
         </section>
     </main>
