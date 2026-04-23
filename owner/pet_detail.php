@@ -139,13 +139,13 @@ if ($treat_stmt) {
         <!-- Tabs Navigation -->
         <section class="owner-panel" style="margin-bottom: 24px;">
             <div style="display: flex; gap: 24px; border-bottom: 1px solid #e5e7eb; margin: -24px -24px 0 -24px; padding: 0 24px;">
-                <a href="#" style="padding: 16px 0; color: #0d9488; border-bottom: 3px solid #0d9488; text-decoration: none; font-weight: 600; font-size: 0.95rem;">Vaccinations</a>
-                <a href="#" style="padding: 16px 0; color: #6b7280; text-decoration: none; font-weight: 600; font-size: 0.95rem;">Deworming</a>
-                <a href="#" style="padding: 16px 0; color: #6b7280; text-decoration: none; font-weight: 600; font-size: 0.95rem;">Treatments</a>
+                <button type="button" onclick="switchTab('vaccinations', this)" class="tab-btn active" style="padding: 16px 0; color: #0d9488; border-bottom: 3px solid #0d9488; border: none; background: none; text-decoration: none; font-weight: 600; font-size: 0.95rem; cursor: pointer;">Vaccinations</button>
+                <button type="button" onclick="switchTab('deworming', this)" class="tab-btn" style="padding: 16px 0; color: #6b7280; border-bottom: 3px solid transparent; border: none; background: none; text-decoration: none; font-weight: 600; font-size: 0.95rem; cursor: pointer;">Deworming</button>
+                <button type="button" onclick="switchTab('treatments', this)" class="tab-btn" style="padding: 16px 0; color: #6b7280; border-bottom: 3px solid transparent; border: none; background: none; text-decoration: none; font-weight: 600; font-size: 0.95rem; cursor: pointer;">Treatments</button>
             </div>
 
             <!-- Vaccinations Table -->
-            <div id="vaccinations" style="margin-top: 20px;">
+            <div id="vaccinations-content" class="tab-content" style="margin-top: 20px; display: block;">
                 <div style="overflow-x: auto;">
                     <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
                         <thead>
@@ -157,6 +157,11 @@ if ($treat_stmt) {
                             </tr>
                         </thead>
                         <tbody>
+                            <?php if (empty($vaccinations)): ?>
+                            <tr>
+                                <td colspan="4" style="padding: 24px 0; text-align: center; color: #9ca3af;">No vaccination records found</td>
+                            </tr>
+                            <?php else: ?>
                             <?php foreach ($vaccinations as $vac): ?>
                             <tr style="border-bottom: 1px solid #e5e7eb;">
                                 <td style="padding: 14px 0; color: #1f2937;"><?= htmlspecialchars($vac['vaccine_name']) ?></td>
@@ -165,11 +170,113 @@ if ($treat_stmt) {
                                 <td style="padding: 14px 0; color: #1f2937;"><?= htmlspecialchars($vac['dose_number']) ?></td>
                             </tr>
                             <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Deworming Table -->
+            <div id="deworming-content" class="tab-content" style="margin-top: 20px; display: none;">
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid #e5e7eb;">
+                                <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Product</th>
+                                <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Date Given</th>
+                                <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Next Due</th>
+                                <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Dose</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($dewormings)): ?>
+                            <tr>
+                                <td colspan="4" style="padding: 24px 0; text-align: center; color: #9ca3af;">No deworming records found</td>
+                            </tr>
+                            <?php else: ?>
+                            <?php foreach ($dewormings as $dew): ?>
+                            <tr style="border-bottom: 1px solid #e5e7eb;">
+                                <td style="padding: 14px 0; color: #1f2937;"><?= htmlspecialchars($dew['product_name']) ?></td>
+                                <td style="padding: 14px 0; color: #1f2937;"><?= date('M d, Y', strtotime($dew['date_given'])) ?></td>
+                                <td style="padding: 14px 0; color: #1f2937;"><?= date('M d, Y', strtotime($dew['next_due_date'])) ?></td>
+                                <td style="padding: 14px 0; color: #1f2937;"><?= htmlspecialchars($dew['dose']) ?></td>
+                            </tr>
+                            <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Treatments Table -->
+            <div id="treatments-content" class="tab-content" style="margin-top: 20px; display: none;">
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid #e5e7eb;">
+                                <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Diagnosis</th>
+                                <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Treatment</th>
+                                <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Date</th>
+                                <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Severity</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($treatments)): ?>
+                            <tr>
+                                <td colspan="4" style="padding: 24px 0; text-align: center; color: #9ca3af;">No treatment records found</td>
+                            </tr>
+                            <?php else: ?>
+                            <?php foreach ($treatments as $treat): ?>
+                            <tr style="border-bottom: 1px solid #e5e7eb;">
+                                <td style="padding: 14px 0; color: #1f2937;"><?= htmlspecialchars($treat['diagnosis']) ?></td>
+                                <td style="padding: 14px 0; color: #1f2937;"><?= htmlspecialchars($treat['treatment']) ?></td>
+                                <td style="padding: 14px 0; color: #1f2937;"><?= date('M d, Y', strtotime($treat['treatment_date'])) ?></td>
+                                <td style="padding: 14px 0; color: #1f2937;">
+                                    <span style="background: <?= $treat['severity'] === 'Critical' ? '#fee2e2' : ($treat['severity'] === 'High' ? '#fef3c7' : '#dcfce7') ?>; color: <?= $treat['severity'] === 'Critical' ? '#991b1b' : ($treat['severity'] === 'High' ? '#92400e' : '#166534') ?>; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600;">
+                                        <?= htmlspecialchars($treat['severity']) ?>
+                                    </span>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
             </div>
         </section>
+
+        <script>
+        function switchTab(tabName, activeButton) {
+            // Hide all tab contents
+            const contents = document.querySelectorAll('.tab-content');
+            contents.forEach(content => content.style.display = 'none');
+            
+            // Remove active class from all buttons
+            const buttons = document.querySelectorAll('.tab-btn');
+            buttons.forEach(btn => {
+                btn.style.color = '#6b7280';
+                btn.style.borderBottom = '3px solid transparent';
+                btn.classList.remove('active');
+            });
+            
+            // Show selected tab content
+            const selectedContent = document.getElementById(tabName + '-content');
+            if (selectedContent) {
+                selectedContent.style.display = 'block';
+            }
+            
+            // Highlight active button
+            if (activeButton) {
+                activeButton.style.color = '#0d9488';
+                activeButton.style.borderBottom = '3px solid #0d9488';
+                activeButton.classList.add('active');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            switchTab('vaccinations', document.querySelector('.tab-btn.active'));
+        });
+        </script>
     </main>
 </div>
 
