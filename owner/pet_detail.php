@@ -20,7 +20,7 @@ if ($pet_id <= 0) {
 $pet = null;
 $pet_stmt = mysqli_prepare($conn,
     "SELECT p.id, p.name, p.species, p.breed, p.gender, p.dob, p.weight, p.status,
-            p.allergies, p.last_visit, p.vet_id,
+            p.allergies, p.last_visit, p.created_at, p.vet_id,
             CONCAT(v.first_name, ' ', v.last_name) AS vet_name,
             v.clinic_name
      FROM pets p
@@ -115,6 +115,14 @@ if (!empty($treatments[0]['treatment_date'])) {
     $treat_ts = strtotime((string)$treatments[0]['treatment_date']);
     if ($treat_ts !== false && $treat_ts > 0) {
         $last_visit_candidates[] = $treat_ts;
+    }
+}
+
+$raw_registered_date = (string)($pet['created_at'] ?? '');
+if ($raw_registered_date !== '' && $raw_registered_date !== '0000-00-00' && $raw_registered_date !== '1970-01-01') {
+    $registered_ts = strtotime($raw_registered_date);
+    if ($registered_ts !== false && $registered_ts > 0) {
+        $last_visit_candidates[] = $registered_ts;
     }
 }
 
