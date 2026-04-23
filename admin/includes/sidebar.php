@@ -54,7 +54,7 @@
 
     <!-- Logout -->
     <div class="sidebar-bottom">
-        <a href="../logout.php" class="sidebar-logout">
+        <a href="../logout.php" class="sidebar-logout" onclick="return confirm('Are you sure you want to log out?');">
             <i class="bi bi-box-arrow-left"></i>
             <span>Logout</span>
         </a>

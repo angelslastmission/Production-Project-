@@ -54,7 +54,7 @@
     </nav>
 
     <div class="vet-sidebar-bottom">
-        <a href="../logout.php" class="vet-logout-link">
+        <a href="../logout.php" class="vet-logout-link" onclick="return confirm('Are you sure you want to log out?');">
             <i class="bi bi-box-arrow-left"></i>
             <span>Logout</span>
         </a>

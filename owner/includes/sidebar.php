@@ -31,7 +31,7 @@ $active_page = $active_page ?? 'dashboard';
     </nav>
 
     <div class="owner-sidebar-footer">
-        <a href="../logout.php" class="owner-nav-link">
+        <a href="../logout.php" class="owner-nav-link" onclick="return confirm('Are you sure you want to log out?');">
             <i class="bi bi-box-arrow-left"></i>
             <span>Logout</span>
         </a>
