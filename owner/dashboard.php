@@ -12,8 +12,15 @@ if ($owner_id <= 0) {
     exit();
 }
 
+// Ensure greeting uses the app's local timezone.
+$app_timezone = $_SESSION['user_timezone'] ?? 'Asia/Kathmandu';
+if (!in_array($app_timezone, timezone_identifiers_list(), true)) {
+    $app_timezone = 'Asia/Kathmandu';
+}
+date_default_timezone_set($app_timezone);
+
 // Determine greeting based on time
-$hour = (int)date('H');
+$hour = (int)date('G');
 if ($hour < 12) {
     $greeting = 'Good Morning';
 } elseif ($hour < 18) {
@@ -69,43 +76,52 @@ if ($pets_stmt) {
 }
 
 // ── Fetch vaccination alerts ──────────
-$dashboard_alert = null;
+$overdue_alerts = [];
+$upcoming_alerts = [];
 
+// Get LATEST vaccination record for each vaccine per pet
+// Only show overdue if the latest record's date_given is BEFORE the due date (not re-vaccinated yet)
 $overdue_stmt = mysqli_prepare($conn,
-    "SELECT p.id AS pet_id, p.name AS pet_name, v.vaccine_name, v.next_due_date
+    "SELECT p.id AS pet_id, p.name AS pet_name, v.vaccine_name, v.next_due_date, v.date_given,
+            CASE WHEN v.date_given >= v.next_due_date THEN 1 ELSE 0 END AS is_revaccinated
      FROM vaccinations v
      JOIN pets p ON p.id = v.pet_id
      WHERE p.owner_id = ? AND v.next_due_date IS NOT NULL AND v.next_due_date < CURDATE()
-     ORDER BY v.next_due_date ASC
-     LIMIT 1");
+       AND v.id = (SELECT id FROM vaccinations v2 
+                   WHERE v2.pet_id = v.pet_id AND v2.vaccine_name = v.vaccine_name 
+                   ORDER BY v2.date_given DESC LIMIT 1)
+     ORDER BY v.next_due_date ASC");
 if ($overdue_stmt) {
     mysqli_stmt_bind_param($overdue_stmt, 'i', $owner_id);
     mysqli_stmt_execute($overdue_stmt);
     $overdue_result = mysqli_stmt_get_result($overdue_stmt);
-    $dashboard_alert = $overdue_result ? mysqli_fetch_assoc($overdue_result) : null;
-    if ($dashboard_alert) {
-        $dashboard_alert['type'] = 'overdue';
+
+    while ($row = $overdue_result ? mysqli_fetch_assoc($overdue_result) : null) {
+        if (!$row['is_revaccinated']) {
+            $overdue_alerts[] = $row;
+        }
     }
+
     mysqli_stmt_close($overdue_stmt);
 }
 
-if (!$dashboard_alert) {
+if (empty($overdue_alerts)) {
     $upcoming_stmt = mysqli_prepare($conn,
         "SELECT p.id AS pet_id, p.name AS pet_name, v.vaccine_name, v.next_due_date
          FROM vaccinations v
          JOIN pets p ON p.id = v.pet_id
          WHERE p.owner_id = ? AND v.next_due_date IS NOT NULL
            AND v.next_due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
-         ORDER BY v.next_due_date ASC
-         LIMIT 1");
+         ORDER BY v.next_due_date ASC");
     if ($upcoming_stmt) {
         mysqli_stmt_bind_param($upcoming_stmt, 'i', $owner_id);
         mysqli_stmt_execute($upcoming_stmt);
         $upcoming_result = mysqli_stmt_get_result($upcoming_stmt);
-        $dashboard_alert = $upcoming_result ? mysqli_fetch_assoc($upcoming_result) : null;
-        if ($dashboard_alert) {
-            $dashboard_alert['type'] = 'upcoming';
+
+        while ($row = $upcoming_result ? mysqli_fetch_assoc($upcoming_result) : null) {
+            $upcoming_alerts[] = $row;
         }
+
         mysqli_stmt_close($upcoming_stmt);
     }
 }
@@ -113,7 +129,7 @@ if (!$dashboard_alert) {
 // ── Fetch recent notifications/reminders (limit 3) ───
 $notifications = [];
 $notif_stmt = mysqli_prepare($conn,
-    "SELECT r.id, r.reminder_type, r.status, r.created_at, p.name as pet_name
+    "SELECT r.id, r.pet_id, r.reminder_type, r.status, r.created_at, p.name as pet_name
      FROM reminders r
      JOIN pets p ON r.pet_id = p.id
      WHERE r.owner_id = ? AND p.owner_id = ?
@@ -155,27 +171,45 @@ if ($notif_stmt) {
             <p><?= htmlspecialchars(date('l, j F Y')) ?> | <?= htmlspecialchars($clinic_name) ?></p>
         </section>
 
-        <?php if ($dashboard_alert): ?>
-        <section class="owner-alert" style="<?= $dashboard_alert['type'] === 'overdue' ? 'background:#fee2e2;border-left:4px solid #dc2626;' : 'background:#fef3c7;border-left:4px solid #f59e0b;' ?>">
-            <div class="owner-alert-text">
-                <i class="bi <?= $dashboard_alert['type'] === 'overdue' ? 'bi-exclamation-triangle' : 'bi-info-circle' ?>" style="<?= $dashboard_alert['type'] === 'overdue' ? 'color:#dc2626;' : 'color:#f59e0b;' ?>"></i>
-                <span>
-                    <?= htmlspecialchars($dashboard_alert['pet_name']) ?>'s <?= htmlspecialchars($dashboard_alert['vaccine_name']) ?> vaccination
-                    <?= $dashboard_alert['type'] === 'overdue' ? 'is overdue since' : 'is coming up on' ?>
-                    <?= htmlspecialchars(date('d M Y', strtotime($dashboard_alert['next_due_date']))) ?>.
-                    <?= $dashboard_alert['type'] === 'overdue'
-                        ? 'Please schedule an appointment immediately to maintain compliance and pet safety.'
-                        : 'No appointment request is needed yet. Keep an eye on this date.' ?>
-                </span>
-            </div>
-            <?php if ($dashboard_alert['type'] === 'overdue'): ?>
-            <div>
-                <a href="schedule.php?pet_id=<?= (int)$dashboard_alert['pet_id'] ?>&type=<?= urlencode($dashboard_alert['type']) ?>" class="owner-alert-btn" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">
-                    Schedule Now
-                </a>
+        <?php if (!empty($overdue_alerts)): ?>
+            <?php $alert_count = 0; ?>
+            <?php foreach ($overdue_alerts as $overdue_alert): ?>
+            <?php if ($alert_count >= 3) break; ?>
+            <section class="owner-alert" style="background:#fee2e2;border-left:4px solid #dc2626;">
+                <div class="owner-alert-text">
+                    <i class="bi bi-exclamation-triangle" style="color:#dc2626;"></i>
+                    <span style="line-height:1.4;"><?= htmlspecialchars($overdue_alert['pet_name']) ?>'s <?= htmlspecialchars($overdue_alert['vaccine_name']) ?> vaccination is overdue since <?= htmlspecialchars(date('d M Y', strtotime($overdue_alert['next_due_date']))) ?>. Please schedule an appointment immediately.</span>
+                </div>
+                <div>
+                    <a href="schedule.php?pet_id=<?= (int)$overdue_alert['pet_id'] ?>&type=overdue" class="owner-alert-btn" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">
+                        Schedule Now
+                    </a>
+                </div>
+            </section>
+            <?php $alert_count++; ?>
+            <?php endforeach; ?>
+            <?php if (count($overdue_alerts) > 3): ?>
+            <div style="text-align:center; margin-bottom:24px; padding:12px;">
+                <a href="notifications.php" style="color:#0d9488; font-weight:600; text-decoration:none;">View all <?= count($overdue_alerts) ?> alerts →</a>
             </div>
             <?php endif; ?>
-        </section>
+        <?php elseif (!empty($upcoming_alerts)): ?>
+            <?php $upcoming_count = 0; ?>
+            <?php foreach ($upcoming_alerts as $upcoming_alert): ?>
+            <?php if ($upcoming_count >= 3) break; ?>
+            <section class="owner-alert" style="background:#fef3c7;border-left:4px solid #f59e0b;">
+                <div class="owner-alert-text">
+                    <i class="bi bi-info-circle" style="color:#f59e0b;"></i>
+                    <span style="line-height:1.4;"><?= htmlspecialchars($upcoming_alert['pet_name']) ?>'s <?= htmlspecialchars($upcoming_alert['vaccine_name']) ?> vaccination is coming up on <?= htmlspecialchars(date('d M Y', strtotime($upcoming_alert['next_due_date']))) ?>. Keep an eye on this date.</span>
+                </div>
+            </section>
+            <?php $upcoming_count++; ?>
+            <?php endforeach; ?>
+            <?php if (count($upcoming_alerts) > 3): ?>
+            <div style="text-align:center; margin-bottom:24px; padding:12px;">
+                <a href="notifications.php" style="color:#0d9488; font-weight:600; text-decoration:none;">View all <?= count($upcoming_alerts) ?> upcoming →</a>
+            </div>
+            <?php endif; ?>
         <?php endif; ?>
 
         <!-- My Pets Section -->
