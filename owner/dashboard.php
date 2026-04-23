@@ -162,10 +162,6 @@ if ($notif_stmt) {
     <?php include 'includes/sidebar.php'; ?>
 
     <main class="owner-main">
-        <div class="owner-search-row">
-            <input type="text" class="owner-search" placeholder="Search pets or records..."/>
-        </div>
-
         <section class="owner-greeting">
             <h1><?= $greeting ?>, <?= htmlspecialchars($owner_name) ?></h1>
             <p><?= htmlspecialchars(date('l, j F Y')) ?> | <?= htmlspecialchars($clinic_name) ?></p>
