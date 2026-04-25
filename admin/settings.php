@@ -8,6 +8,10 @@ $active_page = 'settings';
 $success_message = '';
 $error_message = '';
 
+function is_strong_password($password) {
+    return (bool)preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d])(?=\S+$).{8,}$/', $password);
+}
+
 if (!isset($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
@@ -117,8 +121,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($current_password === '' || $new_password === '' || $confirm_password === '') {
             $error_message = 'Please fill all password fields.';
-        } elseif (strlen($new_password) < 6) {
-            $error_message = 'New password must be at least 6 characters.';
+        } elseif (!is_strong_password($new_password)) {
+            $error_message = 'Weak password. Use at least 8 characters with uppercase, lowercase, number, special character, and no spaces.';
         } elseif ($new_password !== $confirm_password) {
             $error_message = 'New password and confirm password do not match.';
         } else {
@@ -133,6 +137,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 if (!$user_row || !password_verify($current_password, $user_row['password'])) {
                     $error_message = 'Current password is incorrect.';
+                } elseif (password_verify($new_password, $user_row['password'])) {
+                    $error_message = 'New password must be different from current password.';
                 } else {
                     $new_hash = password_hash($new_password, PASSWORD_DEFAULT);
                     $password_stmt = mysqli_prepare($conn, "UPDATE users SET password = ? WHERE id = ? AND role = 'admin'");
@@ -309,7 +315,7 @@ if ($admin_full_name === '') {
                             <i class="bi bi-bell-fill me-2"></i>Reminder preferences
                         </h5>
                     </div>
-                    <form method="post" class="p-3 settings-body">
+                    <form method="post" class="p-3 settings-body" id="adminPasswordForm">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
                         <input type="hidden" name="action" value="save_preferences">
                         <div class="settings-switch-row settings-row-gap">
@@ -402,22 +408,34 @@ if ($admin_full_name === '') {
                         <div class="settings-field">
                             <label class="form-label settings-label">New password</label>
                             <div class="input-group settings-password-group">
-                                <input type="password" id="new_password" name="new_password" class="form-control settings-input" placeholder="New password">
+                                <input type="password" id="new_password" name="new_password" class="form-control settings-input" placeholder="New password" minlength="8">
                                 <button type="button" class="btn settings-password-toggle" data-target="new_password" aria-label="Toggle new password visibility">
                                     <i class="bi bi-eye"></i>
                                 </button>
                             </div>
+                            <small class="text-muted">At least 8 chars: uppercase, lowercase, number, special character, no spaces.</small>
                         </div>
                         <div class="settings-field settings-field-compact">
                             <label class="form-label settings-label">Confirm new password</label>
                             <div class="input-group settings-password-group">
-                                <input type="password" id="confirm_password" name="confirm_password" class="form-control settings-input" placeholder="Confirm new password">
+                                <input type="password" id="confirm_password" name="confirm_password" class="form-control settings-input" placeholder="Confirm new password" minlength="8">
                                 <button type="button" class="btn settings-password-toggle" data-target="confirm_password" aria-label="Toggle confirm password visibility">
                                     <i class="bi bi-eye"></i>
                                 </button>
                             </div>
                         </div>
-                        <button type="submit" class="btn btn-dark w-100 settings-btn">Update password</button>
+                        <div id="adminPasswordMismatchAlert" class="admin-alert-error mb-3" style="display:none;">
+                            <i class="bi bi-exclamation-circle-fill me-2"></i>
+                            New password and confirm password do not match.
+                        </div>
+                        <div id="adminPasswordWeakAlert" class="admin-alert-error mb-3" style="display:none;">
+                            <i class="bi bi-exclamation-circle-fill me-2"></i>
+                            Weak password. Use uppercase, lowercase, number, special character, and at least 8 characters.
+                        </div>
+                        <button type="submit" id="adminUpdatePasswordBtn" class="btn btn-dark w-100 settings-btn" disabled style="opacity:0.55; cursor:not-allowed;">Update password</button>
+                        <div class="text-end mt-2">
+                            <a href="forgot_password.php" class="auth-link" style="font-size: 0.9rem;">Forgot password?</a>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -453,6 +471,47 @@ document.querySelectorAll('.settings-password-toggle').forEach(function(button) 
         }
     });
 });
+
+(function() {
+    var current = document.getElementById('current_password');
+    var next = document.getElementById('new_password');
+    var confirm = document.getElementById('confirm_password');
+    var submitBtn = document.getElementById('adminUpdatePasswordBtn');
+    var mismatchAlert = document.getElementById('adminPasswordMismatchAlert');
+    var weakAlert = document.getElementById('adminPasswordWeakAlert');
+    var passwordForm = document.getElementById('adminPasswordForm');
+
+    if (!current || !next || !confirm || !submitBtn || !mismatchAlert || !weakAlert) {
+        return;
+    }
+
+    function updatePasswordState() {
+        var currentVal = current.value.trim();
+        var nextVal = next.value;
+        var confirmVal = confirm.value;
+        var strong = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d])(?=\S+$).{8,}$/.test(nextVal);
+        var mismatch = nextVal !== '' && confirmVal !== '' && nextVal !== confirmVal;
+        var valid = currentVal !== '' && strong && confirmVal !== '' && !mismatch;
+
+        mismatchAlert.style.display = mismatch ? 'block' : 'none';
+        weakAlert.style.display = (nextVal !== '' && !strong) ? 'block' : 'none';
+        submitBtn.disabled = !valid;
+        submitBtn.style.opacity = valid ? '1' : '0.55';
+        submitBtn.style.cursor = valid ? 'pointer' : 'not-allowed';
+    }
+
+    [current, next, confirm].forEach(function(input) {
+        input.addEventListener('input', updatePasswordState);
+    });
+
+    if (passwordForm) {
+        passwordForm.addEventListener('reset', function() {
+            window.setTimeout(updatePasswordState, 0);
+        });
+    }
+
+    updatePasswordState();
+})();
 </script>
 </body>
 </html>
