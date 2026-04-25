@@ -49,7 +49,12 @@
 
         <a href="settings.php" class="vet-nav-link <?= ($active_page ?? '') === 'settings' ? 'active' : '' ?>">
             <i class="bi bi-gear"></i>
-            <span>Settings</span>
+            <span>My Profile</span>
+        </a>
+
+        <a href="change_password.php" class="vet-nav-link <?= ($active_page ?? '') === 'change_password' ? 'active' : '' ?>">
+            <i class="bi bi-key"></i>
+            <span>Change Password</span>
         </a>
     </nav>
 
