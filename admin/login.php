@@ -112,6 +112,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                required/>
       </div>
 
+      <div class="text-end mb-4">
+        <a href="forgot_password.php" class="forgot-link">Forgot password?</a>
+      </div>
+
       <!-- Submit -->
       <button type="submit" class="auth-btn">
         <i class="bi bi-shield-lock me-2"></i>
