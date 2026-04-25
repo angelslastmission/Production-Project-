@@ -35,10 +35,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_status'])) {
 
 $owners = mysqli_query($conn,
     "SELECT o.id, o.first_name, o.last_name, o.email, o.phone, o.address, o.is_active, o.created_at,
-            v.first_name AS vet_first_name, v.last_name AS vet_last_name,
+            (
+                SELECT CONCAT(v1.first_name, ' ', v1.last_name)
+                FROM pets p1
+                JOIN users v1 ON p1.vet_id = v1.id AND v1.role = 'vet'
+                WHERE p1.owner_id = o.id
+                ORDER BY p1.created_at DESC, p1.id DESC
+                LIMIT 1
+            ) AS assigned_vet_name,
             (SELECT COUNT(*) FROM pets p WHERE p.owner_id = o.id) AS pet_count
      FROM users o
-     LEFT JOIN users v ON o.vet_id = v.id AND v.role = 'vet'
      WHERE o.role = 'owner'
      ORDER BY o.created_at DESC");
 
@@ -124,9 +130,8 @@ if ($owners) {
                                 <td><?= htmlspecialchars($owner['email']) ?></td>
                                 <td><?= htmlspecialchars($owner['phone'] ?: '-') ?></td>
                                 <td>
-                                    <?php if (!empty($owner['vet_first_name'])): ?>
-                                        Dr. <?= htmlspecialchars($owner['vet_first_name']) ?>
-                                        <?= htmlspecialchars($owner['vet_last_name']) ?>
+                                    <?php if (!empty($owner['assigned_vet_name'])): ?>
+                                        Dr. <?= htmlspecialchars($owner['assigned_vet_name']) ?>
                                     <?php else: ?>
                                         Not assigned
                                     <?php endif; ?>
