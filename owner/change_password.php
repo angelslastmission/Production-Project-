@@ -14,6 +14,10 @@ if ($owner_id <= 0) {
 $success = '';
 $error = '';
 
+function is_strong_password($password) {
+    return (bool)preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d])(?=\S+$).{8,}$/', $password);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $current_password = (string)($_POST['current_password'] ?? '');
     $new_password = (string)($_POST['new_password'] ?? '');
@@ -21,8 +25,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($current_password === '' || $new_password === '' || $confirm_password === '') {
         $error = 'All password fields are required.';
-    } elseif (strlen($new_password) < 8) {
-        $error = 'New password must be at least 8 characters.';
+    } elseif (!is_strong_password($new_password)) {
+        $error = 'Weak password. Use at least 8 characters with uppercase, lowercase, number, special character, and no spaces.';
     } elseif ($new_password !== $confirm_password) {
         $error = 'New password and confirm password do not match.';
     } else {
@@ -36,6 +40,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if (!$owner_row || !password_verify($current_password, (string)$owner_row['password'])) {
                 $error = 'Current password is incorrect.';
+            } elseif (password_verify($new_password, (string)$owner_row['password'])) {
+                $error = 'New password must be different from your current password.';
             } else {
                 $new_hash = password_hash($new_password, PASSWORD_DEFAULT);
                 $update_stmt = mysqli_prepare($conn, "UPDATE users SET password = ? WHERE id = ? AND role = 'owner' LIMIT 1");
@@ -174,7 +180,7 @@ if ($owner_name === '') {
                                 <i class="bi bi-eye"></i>
                             </button>
                         </div>
-                        <small style="color: #6b7280;">Minimum 8 characters.</small>
+                        <small style="color: #6b7280;">At least 8 chars: uppercase, lowercase, number, special character, no spaces.</small>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label" style="font-weight: 600;">Confirm New Password</label>
@@ -189,6 +195,10 @@ if ($owner_name === '') {
 
                 <div id="passwordMismatchAlert" class="alert alert-danger mt-3 d-none" role="alert">
                     Passwords do not match with each other.
+                </div>
+
+                <div id="passwordWeakAlert" class="alert alert-danger mt-3 d-none" role="alert">
+                    Weak password. Use uppercase, lowercase, number, special character, and at least 8 characters.
                 </div>
 
                 <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
@@ -214,6 +224,7 @@ const confirmPasswordInput = document.getElementById('confirm_password');
 const updatePasswordBtn = document.getElementById('updatePasswordBtn');
 const clearPasswordBtn = document.getElementById('clearPasswordBtn');
 const passwordMismatchAlert = document.getElementById('passwordMismatchAlert');
+const passwordWeakAlert = document.getElementById('passwordWeakAlert');
 const toggleCurrentPasswordBtn = document.getElementById('toggleCurrentPassword');
 const toggleNewPasswordBtn = document.getElementById('toggleNewPassword');
 const toggleConfirmPasswordBtn = document.getElementById('toggleConfirmPassword');
@@ -233,10 +244,12 @@ function updateSubmitState() {
     const currentVal = currentPasswordInput.value.trim();
     const newVal = newPasswordInput.value;
     const confirmVal = confirmPasswordInput.value;
+    const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d])(?=\S+$).{8,}$/.test(newVal);
     const hasMismatch = newVal !== '' && confirmVal !== '' && newVal !== confirmVal;
-    const valid = currentVal !== '' && newVal.length >= 8 && confirmVal !== '' && !hasMismatch;
+    const valid = currentVal !== '' && strongPassword && confirmVal !== '' && !hasMismatch;
 
     passwordMismatchAlert.classList.toggle('d-none', !hasMismatch);
+    passwordWeakAlert.classList.toggle('d-none', !(newVal !== '' && !strongPassword));
 
     updatePasswordBtn.disabled = !valid;
     updatePasswordBtn.style.opacity = valid ? '1' : '0.55';
