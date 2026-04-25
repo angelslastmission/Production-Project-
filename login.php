@@ -172,7 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       <!-- Forgot password -->
       <div class="text-end mb-4">
-        <a href="#" class="forgot-link">Forgot password?</a>
+        <a href="owner/forgot_password.php" class="forgot-link" id="forgot_password_link">Forgot password?</a>
       </div>
 
       <!-- Submit Button -->
@@ -224,6 +224,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 function selectRole(role, element) {
     // Update hidden input
     document.getElementById('role_input').value = role;
+  document.getElementById('forgot_password_link').href = role === 'vet' ? 'vet/forgot_password.php' : 'owner/forgot_password.php';
 
     // Update tab styles
     document.querySelectorAll('.role-tab').forEach(function(tab) {
