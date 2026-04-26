@@ -10,6 +10,59 @@ $active_page = 'vet_registrations';
 $success     = '';
 $error       = '';
 
+function ensure_vet_reapplication_columns(mysqli $conn): void {
+    $needed = [
+        'vet_registration_attempts' => "ALTER TABLE users ADD COLUMN vet_registration_attempts TINYINT UNSIGNED NOT NULL DEFAULT 0",
+        'vet_reapply_after' => "ALTER TABLE users ADD COLUMN vet_reapply_after DATETIME NULL DEFAULT NULL",
+    ];
+
+    foreach ($needed as $column => $sql) {
+        $columnEscaped = mysqli_real_escape_string($conn, $column);
+        $check = mysqli_query($conn, "SHOW COLUMNS FROM users LIKE '{$columnEscaped}'");
+        $exists = $check && mysqli_num_rows($check) > 0;
+        if ($check) {
+            mysqli_free_result($check);
+        }
+
+        if (!$exists) {
+            mysqli_query($conn, $sql);
+        }
+    }
+}
+
+ensure_vet_reapplication_columns($conn);
+
+function ensure_vet_rejection_history_table(mysqli $conn): void {
+    $sql = "
+        CREATE TABLE IF NOT EXISTS vet_rejection_history (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            vet_id INT NOT NULL,
+            rejection_reason TEXT NOT NULL,
+            attempts_after_rejection TINYINT UNSIGNED NOT NULL,
+            rejected_by_admin_id INT NULL,
+            rejected_at DATETIME NOT NULL,
+            INDEX idx_vet_id (vet_id),
+            INDEX idx_rejected_at (rejected_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    ";
+
+    mysqli_query($conn, $sql);
+}
+
+ensure_vet_rejection_history_table($conn);
+
+$statusFilter = strtolower(trim($_GET['status'] ?? 'all'));
+$allowedFilters = ['all', 'pending', 'approved', 'rejected'];
+if (!in_array($statusFilter, $allowedFilters, true)) {
+    $statusFilter = 'all';
+}
+
+$statusWhere = '';
+if ($statusFilter !== 'all') {
+    $statusEscaped = mysqli_real_escape_string($conn, $statusFilter);
+    $statusWhere = " AND status = '{$statusEscaped}'";
+}
+
 // ── Handle Approve ───────────────────────
 if (isset($_POST['approve_vet'])) {
     $vet_id = (int)$_POST['vet_id'];
@@ -35,18 +88,58 @@ if (isset($_POST['reject_vet'])) {
     if (empty($reason)) {
         $error = 'Please provide a rejection reason.';
     } else {
+        $attemptStmt = mysqli_prepare($conn, "SELECT COALESCE(vet_registration_attempts, 0) AS vet_registration_attempts FROM users WHERE id = ? AND role = 'vet' LIMIT 1");
+        $currentAttempts = 0;
+
+        if ($attemptStmt) {
+            mysqli_stmt_bind_param($attemptStmt, 'i', $vet_id);
+            mysqli_stmt_execute($attemptStmt);
+            $attemptResult = mysqli_stmt_get_result($attemptStmt);
+            $attemptRow = $attemptResult ? mysqli_fetch_assoc($attemptResult) : null;
+            $currentAttempts = (int)($attemptRow['vet_registration_attempts'] ?? 0);
+            mysqli_stmt_close($attemptStmt);
+        }
+
+        $newAttempts = min(255, $currentAttempts + 1);
+        $reapplyAfter = null;
+        if ($newAttempts >= 3) {
+            $reapplyAfter = (new DateTimeImmutable('+10 days'))->format('Y-m-d H:i:s');
+        }
+
         $stmt = mysqli_prepare($conn,
             "UPDATE users
              SET status = 'rejected',
-                 is_active = 0,
-                 rejection_reason = ?
+                 is_active = 1,
+                 rejection_reason = ?,
+                 vet_registration_attempts = ?,
+                 vet_reapply_after = ?
              WHERE id = ? AND role = 'vet'");
-        mysqli_stmt_bind_param($stmt, 'si', $reason, $vet_id);
+        mysqli_stmt_bind_param($stmt, 'sisi', $reason, $newAttempts, $reapplyAfter, $vet_id);
 
-        if (mysqli_stmt_execute($stmt)) {
-            $success = 'Vet rejected successfully.';
+        if ($stmt && mysqli_stmt_execute($stmt)) {
+            $historyStmt = mysqli_prepare(
+                $conn,
+                "INSERT INTO vet_rejection_history (vet_id, rejection_reason, attempts_after_rejection, rejected_by_admin_id, rejected_at)
+                 VALUES (?, ?, ?, ?, NOW())"
+            );
+            if ($historyStmt) {
+                $adminId = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : null;
+                mysqli_stmt_bind_param($historyStmt, 'isii', $vet_id, $reason, $newAttempts, $adminId);
+                mysqli_stmt_execute($historyStmt);
+                mysqli_stmt_close($historyStmt);
+            }
+
+            if ($newAttempts >= 3) {
+                $success = 'Vet rejected successfully. Re-application locked for 10 days after 3 failed attempts.';
+            } else {
+                $remaining = 3 - $newAttempts;
+                $success = 'Vet rejected successfully. Remaining re-application attempts: ' . $remaining . '.';
+            }
         } else {
             $error = 'Failed to reject vet.';
+        }
+        if ($stmt) {
+            mysqli_stmt_close($stmt);
         }
     }
 }
@@ -56,9 +149,11 @@ $all_vets = mysqli_query($conn,
     "SELECT id, first_name, last_name, email,
             clinic_name, phone, status, created_at,
             license_doc, citizenship_doc,
-            clinic_address, rejection_reason
+            clinic_address, rejection_reason,
+            COALESCE(vet_registration_attempts, 0) AS vet_registration_attempts,
+            vet_reapply_after
      FROM users
-     WHERE role = 'vet'
+     WHERE role = 'vet'{$statusWhere}
      ORDER BY
         CASE status
             WHEN 'pending'  THEN 1
@@ -69,6 +164,7 @@ $all_vets = mysqli_query($conn,
 
 // ── Get selected vet for review ──────────
 $review_vet = null;
+$review_vet_rejection_history = [];
 if (isset($_GET['id'])) {
     $review_id = (int)$_GET['id'];
     $stmt = mysqli_prepare($conn,
@@ -78,6 +174,27 @@ if (isset($_GET['id'])) {
     mysqli_stmt_execute($stmt);
     $result     = mysqli_stmt_get_result($stmt);
     $review_vet = mysqli_fetch_assoc($result);
+
+    if ($review_vet) {
+        $historyStmt = mysqli_prepare(
+            $conn,
+            "SELECT h.rejection_reason, h.attempts_after_rejection, h.rejected_at,
+                    CONCAT(a.first_name, ' ', a.last_name) AS rejected_by_name
+             FROM vet_rejection_history h
+             LEFT JOIN users a ON a.id = h.rejected_by_admin_id
+             WHERE h.vet_id = ?
+             ORDER BY h.rejected_at DESC"
+        );
+        if ($historyStmt) {
+            mysqli_stmt_bind_param($historyStmt, 'i', $review_id);
+            mysqli_stmt_execute($historyStmt);
+            $historyResult = mysqli_stmt_get_result($historyStmt);
+            while ($row = $historyResult ? mysqli_fetch_assoc($historyResult) : null) {
+                $review_vet_rejection_history[] = $row;
+            }
+            mysqli_stmt_close($historyStmt);
+        }
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -113,6 +230,11 @@ if (isset($_GET['id'])) {
                 <p class="admin-page-sub">
                     Review and approve new vet applications
                 </p>
+                <?php if ($statusFilter !== 'all'): ?>
+                <p class="admin-page-sub">
+                    Showing <?= htmlspecialchars(ucfirst($statusFilter)) ?> applications only
+                </p>
+                <?php endif; ?>
             </div>
             <div class="topbar-right">
                 <span class="topbar-user">
@@ -120,6 +242,13 @@ if (isset($_GET['id'])) {
                     <?= htmlspecialchars($_SESSION['user_name']) ?>
                 </span>
             </div>
+        </div>
+
+        <div class="filter-tabs-wrap mb-3">
+            <a href="vet_registrations.php?status=all" class="filter-tab vet-state-link <?= $statusFilter === 'all' ? 'active' : '' ?>">All</a>
+            <a href="vet_registrations.php?status=pending" class="filter-tab vet-state-link <?= $statusFilter === 'pending' ? 'active' : '' ?>">Pending</a>
+            <a href="vet_registrations.php?status=approved" class="filter-tab vet-state-link <?= $statusFilter === 'approved' ? 'active' : '' ?>">Approved</a>
+            <a href="vet_registrations.php?status=rejected" class="filter-tab vet-state-link <?= $statusFilter === 'rejected' ? 'active' : '' ?>">Rejected</a>
         </div>
 
         <!-- Success/Error Messages -->
@@ -148,6 +277,7 @@ if (isset($_GET['id'])) {
                             <th>CLINIC NAME</th>
                             <th>PHONE</th>
                             <th>SUBMITTED</th>
+                            <th>ATTEMPTS</th>
                             <th>STATUS</th>
                             <th>ACTION</th>
                         </tr>
@@ -170,6 +300,11 @@ if (isset($_GET['id'])) {
                                     strtotime($vet['created_at'])) ?>
                             </td>
                             <td>
+                                <span class="badge-docs">
+                                    <?= (int)$vet['vet_registration_attempts'] ?>/3
+                                </span>
+                            </td>
+                            <td>
                                 <?php if ($vet['status'] === 'pending'): ?>
                                     <span class="badge-pending-vet">
                                         Pending
@@ -186,13 +321,13 @@ if (isset($_GET['id'])) {
                             </td>
                             <td>
                                 <?php if ($vet['status'] === 'pending'): ?>
-                                    <a href="vet_registrations.php?id=<?= $vet['id'] ?>"
-                                       class="btn-review">
+                                                <a href="vet_registrations.php?id=<?= $vet['id'] ?>&status=<?= urlencode($statusFilter) ?>"
+                                                    class="btn-review vet-state-link">
                                         Review
                                     </a>
                                 <?php else: ?>
-                                    <a href="vet_registrations.php?id=<?= $vet['id'] ?>"
-                                       class="btn-view-vet">
+                                                <a href="vet_registrations.php?id=<?= $vet['id'] ?>&status=<?= urlencode($statusFilter) ?>"
+                                                    class="btn-view-vet vet-state-link">
                                         View
                                     </a>
                                 <?php endif; ?>
@@ -201,7 +336,7 @@ if (isset($_GET['id'])) {
                         <?php endwhile; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="7"
+                            <td colspan="8"
                                 class="text-center text-muted py-4">
                                 No vet applications yet
                             </td>
@@ -260,6 +395,20 @@ if (isset($_GET['id'])) {
                             <?= htmlspecialchars($review_vet['clinic_address']) ?>
                         </span>
                     </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Attempts used:</span>
+                        <span class="detail-value">
+                            <?= (int)($review_vet['vet_registration_attempts'] ?? 0) ?>/3
+                        </span>
+                    </div>
+                    <?php if (!empty($review_vet['vet_reapply_after'])): ?>
+                    <div class="detail-row">
+                        <span class="detail-label">Reapply allowed after:</span>
+                        <span class="detail-value">
+                            <?= date('M j, Y g:i A', strtotime((string)$review_vet['vet_reapply_after'])) ?>
+                        </span>
+                    </div>
+                    <?php endif; ?>
 
                     <?php if ($review_vet['status'] === 'rejected' &&
                               $review_vet['rejection_reason']): ?>
@@ -268,6 +417,21 @@ if (isset($_GET['id'])) {
                         <span class="detail-value text-danger">
                             <?= htmlspecialchars($review_vet['rejection_reason']) ?>
                         </span>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if (!empty($review_vet_rejection_history)): ?>
+                    <div class="detail-row mt-3" style="display:block;">
+                        <span class="detail-label">Rejection history:</span>
+                        <div class="rejection-history-list mt-2">
+                            <?php foreach ($review_vet_rejection_history as $history): ?>
+                            <div class="rejection-history-item">
+                                <div><strong>Attempt <?= (int)$history['attempts_after_rejection'] ?>/3</strong> on <?= date('M j, Y g:i A', strtotime((string)$history['rejected_at'])) ?></div>
+                                <div class="text-danger"><?= htmlspecialchars($history['rejection_reason']) ?></div>
+                                <div class="text-muted" style="font-size:0.82rem;">By: <?= htmlspecialchars((string)($history['rejected_by_name'] ?: 'Admin')) ?></div>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
                     <?php endif; ?>
 
@@ -399,6 +563,23 @@ function toggleRejectForm() {
     form.style.display =
         form.style.display === 'none' ? 'block' : 'none';
 }
+
+(function () {
+    var storageKey = 'vetRegistrationsScrollY';
+    var stateLinks = document.querySelectorAll('.vet-state-link');
+
+    stateLinks.forEach(function (link) {
+        link.addEventListener('click', function () {
+            sessionStorage.setItem(storageKey, String(window.scrollY || window.pageYOffset || 0));
+        });
+    });
+
+    var savedY = sessionStorage.getItem(storageKey);
+    if (savedY !== null) {
+        window.scrollTo(0, parseInt(savedY, 10) || 0);
+        sessionStorage.removeItem(storageKey);
+    }
+})();
 </script>
 
 </body>

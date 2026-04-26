@@ -20,6 +20,28 @@ include 'config.php';
 $error         = '';
 $selected_role = isset($_GET['role']) ? $_GET['role'] : 'owner';
 
+function ensure_vet_reapplication_columns(mysqli $conn): void {
+  $needed = [
+    'vet_registration_attempts' => "ALTER TABLE users ADD COLUMN vet_registration_attempts TINYINT UNSIGNED NOT NULL DEFAULT 0",
+    'vet_reapply_after' => "ALTER TABLE users ADD COLUMN vet_reapply_after DATETIME NULL DEFAULT NULL",
+  ];
+
+  foreach ($needed as $column => $sql) {
+    $columnEscaped = mysqli_real_escape_string($conn, $column);
+    $check = mysqli_query($conn, "SHOW COLUMNS FROM users LIKE '{$columnEscaped}'");
+    $exists = $check && mysqli_num_rows($check) > 0;
+    if ($check) {
+      mysqli_free_result($check);
+    }
+
+    if (!$exists) {
+      mysqli_query($conn, $sql);
+    }
+  }
+}
+
+ensure_vet_reapplication_columns($conn);
+
 // Make sure selected role is only vet or owner (not admin)
 if (!in_array($selected_role, ['vet', 'owner'])) {
     $selected_role = 'owner';
@@ -40,7 +62,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         // Find user by email and role
         $stmt = mysqli_prepare($conn,
-          "SELECT id, first_name, last_name, password, role, status, is_active, clinic_name
+          "SELECT id, first_name, last_name, password, role, status, is_active, clinic_name,
+                  rejection_reason,
+                  COALESCE(vet_registration_attempts, 0) AS vet_registration_attempts,
+                  vet_reapply_after
            FROM users WHERE email = ? AND role = ?");
         mysqli_stmt_bind_param($stmt, 'ss', $email, $role);
         mysqli_stmt_execute($stmt);
@@ -51,12 +76,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'No account found with that email and role.';
         } elseif (!password_verify($password, $user['password'])) {
             $error = 'Incorrect password. Please try again.';
-        } elseif ($user['is_active'] == 0) {
-            $error = 'Your account has been deactivated. Contact admin.';
         } elseif ($user['status'] === 'pending') {
             $error = 'Your account is pending approval. Please wait for admin review.';
         } elseif ($user['status'] === 'rejected') {
+          if ($role === 'vet') {
+            $reason = trim((string)($user['rejection_reason'] ?? ''));
+            $attempts = (int)($user['vet_registration_attempts'] ?? 0);
+            $reapplyAfterText = '';
+            if (!empty($user['vet_reapply_after'])) {
+              $timestamp = strtotime((string)$user['vet_reapply_after']);
+              if ($timestamp !== false && $timestamp > time()) {
+                $reapplyAfterText = ' You can apply again after ' . date('M j, Y g:i A', $timestamp) . '.';
+              }
+            }
+
+            if ($reason !== '') {
+              $error = 'Your veterinarian registration was rejected: ' . $reason . '.';
+            } else {
+              $error = 'Your veterinarian registration was rejected.';
+            }
+
+            if ($attempts < 3) {
+              $error .= ' You may submit a new application.';
+            }
+
+            $error .= $reapplyAfterText;
+          } else {
             $error = 'Your registration was rejected. Contact admin for details.';
+          }
+        } elseif ($user['is_active'] == 0) {
+          $error = 'Your account has been deactivated. Contact admin.';
         } else {
             // ✅ Login successful
             $_SESSION['user_id']    = $user['id'];
