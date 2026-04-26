@@ -178,6 +178,22 @@ body {
     border: 1px solid #e5e7eb;
 }
 
+.stat-link-card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.stat-link-card:hover,
+.stat-link-card:focus {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+    border-color: #99f6e4;
+    text-decoration: none;
+    color: inherit;
+}
+
 .stat-card-warning {
     border-color: #fcd34d;
 }
@@ -308,6 +324,70 @@ body {
     background: #0d9488;
     color: #ffffff;
     border-color: #0d9488;
+}
+
+.filter-tabs-wrap {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 12px 0 4px;
+    position: sticky;
+    top: 16px;
+    z-index: 20;
+    background: #f8fafc;
+    backdrop-filter: blur(8px);
+}
+
+.filter-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 9px 16px;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    color: #334155;
+    font-size: 0.86rem;
+    font-weight: 700;
+    text-decoration: none;
+    line-height: 1;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.filter-tab:hover {
+    color: #0f766e;
+    border-color: #5eead4;
+    background: #ecfeff;
+    box-shadow: 0 6px 16px rgba(13, 148, 136, 0.12);
+}
+
+.filter-tab.active {
+    background: linear-gradient(180deg, #14b8a6 0%, #0f766e 100%);
+    color: #ffffff;
+    border-color: #0f766e;
+    box-shadow: 0 8px 18px rgba(13, 148, 136, 0.22);
+}
+
+.filter-tab:focus {
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.18);
+}
+
+.rejection-history-list {
+    display: grid;
+    gap: 10px;
+}
+
+.rejection-history-item {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.86rem;
 }
 
 /* ── Responsive ── */

@@ -31,7 +31,8 @@ $pending_count = mysqli_fetch_assoc(mysqli_query($conn,
 // ── Pending vet approvals list ────────
 $pending_vets = mysqli_query($conn,
     "SELECT id, first_name, last_name, email, 
-            clinic_name, phone, created_at
+            clinic_name, phone, created_at,
+            COALESCE(vet_registration_attempts, 0) AS vet_registration_attempts
      FROM users 
      WHERE role = 'vet' AND status = 'pending'
      ORDER BY created_at DESC");
@@ -95,36 +96,36 @@ $today_reminders = mysqli_query($conn,
             <i class="bi bi-exclamation-triangle-fill me-2"></i>
             <?= $pending_count ?> new vet registration<?= $pending_count > 1 ? 's are' : ' is' ?> 
             pending approval — 
-            <a href="vet_registrations.php">review documents now</a>
+            <a href="vet_registrations.php?status=pending">review documents now</a>
         </div>
         <?php endif; ?>
 
         <!-- Stat Cards -->
         <div class="stats-grid">
 
-            <div class="stat-card">
+            <a class="stat-card stat-link-card" href="manage_vets.php" aria-label="Open manage vets">
                 <div class="stat-number"><?= $total_vets ?></div>
                 <div class="stat-label">Total vets</div>
                 <div class="stat-sub text-success">Active</div>
-            </div>
+            </a>
 
-            <div class="stat-card">
+            <a class="stat-card stat-link-card" href="manage_owners.php" aria-label="Open manage pet owners">
                 <div class="stat-number"><?= $total_owners ?></div>
                 <div class="stat-label">Pet owners</div>
                 <div class="stat-sub text-success">Registered</div>
-            </div>
+            </a>
 
-            <div class="stat-card">
+            <a class="stat-card stat-link-card" href="reminder_logs.php" aria-label="Open reminder logs">
                 <div class="stat-number"><?= $total_pets ?></div>
                 <div class="stat-label">Total pets</div>
-                <div class="stat-sub text-muted">All clinics</div>
-            </div>
+                <div class="stat-sub text-muted">View logs</div>
+            </a>
 
-            <div class="stat-card stat-card-warning">
+            <a class="stat-card stat-card-warning stat-link-card" href="vet_registrations.php?status=pending" aria-label="Open pending vet approvals">
                 <div class="stat-number text-warning"><?= $pending_count ?></div>
                 <div class="stat-label">Pending approvals</div>
-                <div class="stat-sub text-warning">Needs action</div>
-            </div>
+                <div class="stat-sub text-warning">Review now</div>
+            </a>
 
         </div>
 
@@ -140,6 +141,7 @@ $today_reminders = mysqli_query($conn,
                             <th>NAME</th>
                             <th>CLINIC</th>
                             <th>SUBMITTED</th>
+                            <th>ATTEMPTS</th>
                             <th>DOCS</th>
                             <th>ACTION</th>
                         </tr>
@@ -157,6 +159,9 @@ $today_reminders = mysqli_query($conn,
                                 <td><?= htmlspecialchars($vet['clinic_name']) ?></td>
                                 <td><?= date('M j, Y', strtotime($vet['created_at'])) ?></td>
                                 <td>
+                                    <span class="badge-docs"><?= (int)$vet['vet_registration_attempts'] ?>/3</span>
+                                </td>
+                                <td>
                                     <span class="badge-docs">Docs uploaded</span>
                                 </td>
                                 <td>
@@ -169,7 +174,7 @@ $today_reminders = mysqli_query($conn,
                             <?php endwhile; ?>
                         <?php else: ?>
                             <tr>
-                                <td colspan="5" class="text-center text-muted py-4">
+                                <td colspan="6" class="text-center text-muted py-4">
                                     No pending approvals 🎉
                                 </td>
                             </tr>
