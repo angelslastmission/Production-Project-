@@ -8,6 +8,12 @@ include 'includes/auth.php';
 
 $active_page = 'patients';
 
+$vet_id = (int)($_SESSION['user_id'] ?? 0);
+if ($vet_id <= 0) {
+    header('Location: ../login.php');
+    exit();
+}
+
 // ── Get filter parameters ────────────
 $search_query = $_GET['search'] ?? '';
 $filter_species = $_GET['species'] ?? '';
@@ -17,9 +23,8 @@ $filter_vaccine = $_GET['vaccine_status'] ?? '';
 // ── Build pets query with filters ────
 $where_conditions = [];
 
-// Filter by clinic (assuming pets have clinic_id or vet_id relationship)
-// For now, we'll assume all vets in a clinic see all pets
-// Adjust based on your actual schema
+// Only show pets assigned to the currently logged-in vet.
+$where_conditions[] = "p.vet_id = $vet_id";
 
 if (!empty($search_query)) {
     $search = mysqli_real_escape_string($conn, $search_query);
