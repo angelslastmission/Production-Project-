@@ -2,6 +2,7 @@
 session_start();
 include '../config.php';
 include 'includes/auth.php';
+include 'includes/reminder_helper.php';
 
 $active_page = 'treatments';
 $success = '';
@@ -73,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $vet_id > 0) {
     if ($error === '') {
         $pet_check = mysqli_query(
             $conn,
-            "SELECT id FROM pets WHERE id = {$form_data['pet_id']} AND vet_id = $vet_id LIMIT 1"
+            "SELECT id, owner_id, name FROM pets WHERE id = {$form_data['pet_id']} AND vet_id = $vet_id LIMIT 1"
         );
 
         if (!$pet_check || mysqli_num_rows($pet_check) === 0) {
@@ -102,7 +103,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $vet_id > 0) {
         ";
 
         if (mysqli_query($conn, $insert_query)) {
-            $success = 'Treatment case added successfully.';
+            $treatment_id = (int)mysqli_insert_id($conn);
+
+            // New same diagnosis follow-up replaces older active follow-up records.
+            $complete_old_stmt = mysqli_prepare(
+                $conn,
+                "UPDATE treatments
+                 SET followup_status = 'completed'
+                 WHERE pet_id = ?
+                   AND vet_id = ?
+                   AND diagnosis = ?
+                   AND id <> ?"
+            );
+            if ($complete_old_stmt) {
+                mysqli_stmt_bind_param($complete_old_stmt, 'iisi', $pet_id, $vet_id, $form_data['diagnosis'], $treatment_id);
+                mysqli_stmt_execute($complete_old_stmt);
+                mysqli_stmt_close($complete_old_stmt);
+            }
+
+            $owner_id = (int)($pet_row['owner_id'] ?? 0);
+            $followup_value = $form_data['followup_date'] !== '' ? $form_data['followup_date'] : null;
+
+            if ($followup_value !== null && $owner_id > 0) {
+                $diagnosis_text = $form_data['diagnosis'] !== '' ? $form_data['diagnosis'] : 'Follow-up check';
+                $reminder_message = 'Follow-up reminder for ' . ($pet_row['name'] ?? 'your pet') . ': ' . $diagnosis_text . '.';
+                petcura_upsert_auto_reminder(
+                    $conn,
+                    $pet_id,
+                    $owner_id,
+                    $vet_id,
+                    'treatment',
+                    $treatment_id,
+                    $followup_value,
+                    'email',
+                    $reminder_message
+                );
+            }
+
+            petcura_refresh_last_visit($conn, $pet_id, $vet_id);
+
+            $success = 'Treatment saved. Follow-up reminder and last-visit were updated automatically.';
             $form_data = [
                 'pet_id' => '',
                 'diagnosis' => '',
@@ -120,7 +160,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $vet_id > 0) {
 
 $treatments = [];
 if ($vet_id > 0) {
-    $list_where = "t.vet_id = $vet_id";
+    $list_where = "t.vet_id = $vet_id AND t.followup_status = 'active'";
     if ($view_mode === 'followups') {
         $list_where .= " AND t.followup_date IS NOT NULL AND t.followup_date >= CURDATE()";
     }
@@ -128,9 +168,13 @@ if ($vet_id > 0) {
     $treatment_query = mysqli_query(
         $conn,
         "SELECT t.id, t.diagnosis, t.treatment_date, t.followup_date, t.severity,
-                p.name AS pet_name
+                p.name AS pet_name,
+                CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,'')) AS owner_name,
+                u.email AS owner_email,
+                u.phone AS owner_phone
          FROM treatments t
          JOIN pets p ON t.pet_id = p.id
+         LEFT JOIN users u ON u.id = p.owner_id
          WHERE $list_where
          ORDER BY t.treatment_date DESC, t.id DESC"
     );
@@ -243,7 +287,7 @@ if ($view_mode === 'followups') {
             <div class="vet-panel-header">
                 <h3 class="vet-panel-title"><i class="bi bi-arrow-counterclockwise me-2"></i><?= htmlspecialchars($records_title) ?></h3>
             </div>
-            <div class="table-responsive">
+            <div class="table-responsive" style="max-height:420px; overflow-y:auto;">
                 <table class="vet-panel-table">
                     <thead>
                         <tr>
@@ -251,37 +295,53 @@ if ($view_mode === 'followups') {
                             <th>Case</th>
                             <th>Treatment date</th>
                             <th>Follow-up</th>
-                            <th>Priority</th>
+                            <th>Owner</th>
+                            <th>Follow-up status</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (empty($treatments)): ?>
                         <tr>
-                            <td colspan="5" class="text-center py-4 text-muted">No treatment cases yet</td>
+                            <td colspan="6" class="text-center py-4 text-muted">No treatment cases yet</td>
                         </tr>
                         <?php else: ?>
                             <?php foreach ($treatments as $row): ?>
                                 <?php
-                                $label = 'Low';
-                                $badge_class = 'vet-pill-updated';
-
-                                if ($row['severity'] === 'moderate') {
-                                    $label = 'Medium';
-                                    $badge_class = 'vet-pill-soon';
-                                } elseif ($row['severity'] === 'severe') {
-                                    $label = 'High';
-                                    $badge_class = 'vet-pill-overdue';
-                                } elseif ($row['severity'] === 'critical') {
-                                    $label = 'Urgent';
-                                    $badge_class = 'vet-pill-overdue';
+                                // Follow-up status based on followup_date vs today
+                                if (empty($row['followup_date'])) {
+                                    $fu_label = 'No follow-up';
+                                    $fu_class = 'vet-pill-status';
+                                } else {
+                                    $fu_days = (int)((strtotime($row['followup_date']) - strtotime(date('Y-m-d'))) / 86400);
+                                    if ($fu_days < 0) {
+                                        $fu_label = 'Overdue';
+                                        $fu_class = 'vet-pill-overdue';
+                                    } elseif ($fu_days === 0) {
+                                        $fu_label = 'Today';
+                                        $fu_class = 'vet-pill-soon';
+                                    } elseif ($fu_days <= 3) {
+                                        $fu_label = 'In ' . $fu_days . ' day' . ($fu_days > 1 ? 's' : '');
+                                        $fu_class = 'vet-pill-soon';
+                                    } else {
+                                        $fu_label = 'Upcoming';
+                                        $fu_class = 'vet-pill-upcoming';
+                                    }
                                 }
+                                $o_name  = trim($row['owner_name'] ?? '');
+                                $o_email = trim($row['owner_email'] ?? '');
                                 ?>
                                 <tr>
                                     <td><?= htmlspecialchars($row['pet_name']) ?></td>
                                     <td><?= htmlspecialchars($row['diagnosis']) ?></td>
                                     <td><?= htmlspecialchars(date('M d, Y', strtotime($row['treatment_date']))) ?></td>
                                     <td><?= $row['followup_date'] ? htmlspecialchars(date('M d, Y', strtotime($row['followup_date']))) : 'N/A' ?></td>
-                                    <td><span class="vet-pill <?= htmlspecialchars($badge_class) ?>"><?= htmlspecialchars($label) ?></span></td>
+                                    <td>
+                                        <?php if ($o_name !== ''): ?><div style="font-weight:600;font-size:0.85rem;"><?= htmlspecialchars($o_name) ?></div><?php endif; ?>
+                                        <?php if (!empty($row['owner_phone'])): ?><div style="font-size:0.78rem;color:#6b7280;"><i class="bi bi-telephone-fill" style="font-size:0.7rem;"></i> <?= htmlspecialchars($row['owner_phone']) ?></div><?php endif; ?>
+                                        <?php if ($o_email !== ''): ?><div style="font-size:0.78rem;color:#6b7280;"><i class="bi bi-envelope-fill" style="font-size:0.7rem;"></i> <?= htmlspecialchars($o_email) ?></div><?php endif; ?>
+                                        <?php if ($o_name === '' && $o_email === ''): ?><span style="color:#9ca3af;font-size:0.8rem;">—</span><?php endif; ?>
+                                    </td>
+                                    <td><span class="vet-pill <?= htmlspecialchars($fu_class) ?>"><?= htmlspecialchars($fu_label) ?></span></td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
