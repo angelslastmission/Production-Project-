@@ -2,6 +2,7 @@
 session_start();
 include '../config.php';
 include 'includes/auth.php';
+include 'includes/reminder_helper.php';
 
 $active_page = 'vaccinations';
 $success = '';
@@ -75,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $vet_id > 0) {
     if ($error === '') {
         $pet_check = mysqli_query(
             $conn,
-            "SELECT id, species FROM pets WHERE id = {$form_data['pet_id']} AND vet_id = $vet_id LIMIT 1"
+            "SELECT id, owner_id, species FROM pets WHERE id = {$form_data['pet_id']} AND vet_id = $vet_id LIMIT 1"
         );
 
         if (!$pet_check || mysqli_num_rows($pet_check) === 0) {
@@ -114,7 +115,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $vet_id > 0) {
         ";
 
         if (mysqli_query($conn, $insert_query)) {
-            $success = 'Vaccination record added successfully.';
+            $vaccination_id = (int)mysqli_insert_id($conn);
+            $owner_id = (int)($pet_row['owner_id'] ?? 0);
+
+            // New same vaccine record replaces older active records, even if next due date is empty/N/A.
+            $complete_old_stmt = mysqli_prepare(
+                $conn,
+                "UPDATE vaccinations
+                 SET reminder_status = 'completed'
+                 WHERE pet_id = ?
+                   AND vet_id = ?
+                   AND vaccine_name = ?
+                   AND id <> ?"
+            );
+            if ($complete_old_stmt) {
+                mysqli_stmt_bind_param($complete_old_stmt, 'iisi', $pet_id, $vet_id, $form_data['vaccine_name'], $vaccination_id);
+                mysqli_stmt_execute($complete_old_stmt);
+                mysqli_stmt_close($complete_old_stmt);
+            }
+
+            $next_due_date_value = $form_data['next_due_date'] !== '' ? $form_data['next_due_date'] : null;
+            if ($next_due_date_value !== null && $owner_id > 0) {
+                $reminder_message = 'Vaccination reminder for upcoming dose (' . $form_data['vaccine_name'] . ').';
+                petcura_upsert_auto_reminder(
+                    $conn,
+                    $pet_id,
+                    $owner_id,
+                    $vet_id,
+                    'vaccination',
+                    $vaccination_id,
+                    $next_due_date_value,
+                    'email',
+                    $reminder_message
+                );
+            }
+
+            $new_vaccination_status = 'up-to-date';
+            if ($next_due_date_value !== null) {
+                $new_vaccination_status = $next_due_date_value < date('Y-m-d') ? 'overdue' : 'in-progress';
+            }
+
+            $status_stmt = mysqli_prepare(
+                $conn,
+                "UPDATE pets
+                 SET vaccination_status = ?, vaccination_type = ?
+                 WHERE id = ? AND vet_id = ?"
+            );
+            if ($status_stmt) {
+                mysqli_stmt_bind_param($status_stmt, 'ssii', $new_vaccination_status, $form_data['vaccine_name'], $pet_id, $vet_id);
+                mysqli_stmt_execute($status_stmt);
+                mysqli_stmt_close($status_stmt);
+            }
+
+            petcura_refresh_last_visit($conn, $pet_id, $vet_id);
+
+            $success = 'Vaccination saved. Reminder and last-visit were updated automatically.';
             $form_data = [
                 'pet_id' => '',
                 'vaccine_name' => '',
@@ -134,7 +189,7 @@ $vaccinations = [];
 $today = new DateTime(date('Y-m-d'));
 
 if ($vet_id > 0) {
-    $list_where = "v.vet_id = $vet_id";
+    $list_where = "v.vet_id = $vet_id AND v.reminder_status = 'active'";
     if ($view_mode === 'due_week') {
         $list_where .= " AND v.next_due_date IS NOT NULL AND v.next_due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)";
     } elseif ($view_mode === 'overdue') {
@@ -144,9 +199,13 @@ if ($vet_id > 0) {
     $vaccination_query = mysqli_query(
         $conn,
         "SELECT v.id, v.vaccine_name, v.date_given, v.next_due_date, v.dose_number,
-                p.name AS pet_name, p.species
+                p.name AS pet_name, p.species,
+                CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,'')) AS owner_name,
+                u.email AS owner_email,
+                u.phone AS owner_phone
          FROM vaccinations v
          JOIN pets p ON v.pet_id = p.id
+         LEFT JOIN users u ON u.id = p.owner_id
          WHERE $list_where
          ORDER BY v.date_given DESC, v.id DESC"
     );
@@ -160,23 +219,7 @@ if ($vet_id > 0) {
 
 function get_due_status($next_due_date)
 {
-    if (!$next_due_date || $next_due_date === '0000-00-00') {
-        return ['label' => 'No due date', 'class' => 'vet-pill-status'];
-    }
-
-    $today = new DateTime(date('Y-m-d'));
-    $due = new DateTime($next_due_date);
-
-    if ($due < $today) {
-        return ['label' => 'Overdue', 'class' => 'vet-pill-overdue'];
-    }
-
-    $days_left = (int)$today->diff($due)->days;
-    if ($days_left <= 14) {
-        return ['label' => 'Due soon', 'class' => 'vet-pill-soon'];
-    }
-
-    return ['label' => 'Up to date', 'class' => 'vet-pill-updated'];
+    return petcura_due_status($next_due_date);
 }
 
 $records_title = 'Vaccination records';
@@ -282,46 +325,29 @@ if ($view_mode === 'due_week') {
             <div class="vet-panel-header">
                 <h3 class="vet-panel-title"><i class="bi bi-shield-check me-2"></i><?= htmlspecialchars($records_title) ?></h3>
             </div>
-            <div class="table-responsive">
+            <div class="table-responsive" style="max-height:420px; overflow-y:auto;">
                 <table class="vet-panel-table">
                     <thead>
                         <tr>
                             <th>Patient</th>
-                            <th>Vaccine</th>
-                            <th>Date given</th>
-                            <th>Next due</th>
-                            <th>Status</th>
+                                            <th>Vaccine</th>
+                                            <th>Date given</th>
+                                            <th>Next due</th>
+                                            <th>Owner</th>
+                                            <th>Status</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (empty($vaccinations)): ?>
                         <tr>
-                            <td colspan="5" class="text-center py-4 text-muted">No vaccination records yet</td>
+                            <td colspan="6" class="text-center py-4 text-muted">No vaccination records yet</td>
                         </tr>
                         <?php else: ?>
                             <?php foreach ($vaccinations as $row): ?>
                                 <?php
-                                $status_label = 'No due date';
-                                $status_class = 'vet-pill-status';
-
-                                if (!empty($row['next_due_date']) && $row['next_due_date'] !== '0000-00-00') {
-                                    $due_date = new DateTime($row['next_due_date']);
-
-                                    if ($due_date < $today) {
-                                        $status_label = 'Overdue';
-                                        $status_class = 'vet-pill-overdue';
-                                    } else {
-                                        $days_left = (int)$today->diff($due_date)->days;
-
-                                        if ($days_left <= 14) {
-                                            $status_label = 'Due soon';
-                                            $status_class = 'vet-pill-soon';
-                                        } else {
-                                            $status_label = 'Up to date';
-                                            $status_class = 'vet-pill-updated';
-                                        }
-                                    }
-                                }
+                                $due_status = get_due_status($row['next_due_date'] ?? null);
+                                $status_label = $due_status['label'];
+                                $status_class = $due_status['class'];
                                 ?>
                                 <tr>
                                     <td><?= htmlspecialchars($row['pet_name']) ?></td>
@@ -329,6 +355,13 @@ if ($view_mode === 'due_week') {
                                     <td><?= htmlspecialchars(date('M d, Y', strtotime($row['date_given']))) ?></td>
                                     <td>
                                         <?= $row['next_due_date'] ? htmlspecialchars(date('M d, Y', strtotime($row['next_due_date']))) : 'N/A' ?>
+                                    </td>
+                                    <td>
+                                        <?php $o_name = trim($row['owner_name'] ?? ''); $o_email = trim($row['owner_email'] ?? ''); $o_phone = trim($row['owner_phone'] ?? ''); ?>
+                                        <?php if ($o_name !== ''): ?><div style="font-weight:600;font-size:0.85rem;"><?= htmlspecialchars($o_name) ?></div><?php endif; ?>
+                                        <?php if ($o_phone !== ''): ?><div style="font-size:0.78rem;color:#6b7280;"><i class="bi bi-telephone-fill" style="font-size:0.7rem;"></i> <?= htmlspecialchars($o_phone) ?></div><?php endif; ?>
+                                        <?php if ($o_email !== ''): ?><div style="font-size:0.78rem;color:#6b7280;"><i class="bi bi-envelope-fill" style="font-size:0.7rem;"></i> <?= htmlspecialchars($o_email) ?></div><?php endif; ?>
+                                        <?php if ($o_name === '' && $o_phone === '' && $o_email === ''): ?><span style="color:#9ca3af;font-size:0.8rem;">—</span><?php endif; ?>
                                     </td>
                                     <td>
                                         <span class="vet-pill <?= htmlspecialchars($status_class) ?>">
