@@ -1,56 +1,31 @@
 <?php
-// ═══════════════════════════════════════
-// BACKEND — Admin Dashboard
-// ═══════════════════════════════════════
 session_start();
 include '../config.php';
 include 'includes/auth.php';
+include 'includes/reminder_monitor_helper.php';
 
 $active_page = 'dashboard';
 
-// ── Stat counts ──────────────────────
-// Total approved vets
 $total_vets = mysqli_fetch_assoc(mysqli_query($conn,
-    "SELECT COUNT(*) as count FROM users 
-    WHERE role = 'vet' AND status = 'approved' AND is_active = 1"))['count'];
+    "SELECT COUNT(*) as count FROM users WHERE role = 'vet' AND status = 'approved' AND is_active = 1"))['count'];
 
-// Total pet owners
 $total_owners = mysqli_fetch_assoc(mysqli_query($conn,
-    "SELECT COUNT(*) as count FROM users 
-     WHERE role = 'owner'"))['count'];
+    "SELECT COUNT(*) as count FROM users WHERE role = 'owner'"))['count'];
 
-// Total pets
 $total_pets = mysqli_fetch_assoc(mysqli_query($conn,
     "SELECT COUNT(*) as count FROM pets"))['count'];
 
-// Pending vet approvals
 $pending_count = mysqli_fetch_assoc(mysqli_query($conn,
-    "SELECT COUNT(*) as count FROM users 
-     WHERE role = 'vet' AND status = 'pending'"))['count'];
+    "SELECT COUNT(*) as count FROM users WHERE role = 'vet' AND status = 'pending'"))['count'];
 
-// ── Pending vet approvals list ────────
 $pending_vets = mysqli_query($conn,
-    "SELECT id, first_name, last_name, email, 
-            clinic_name, phone, created_at,
+    "SELECT id, first_name, last_name, email, clinic_name, phone, created_at,
             COALESCE(vet_registration_attempts, 0) AS vet_registration_attempts
-     FROM users 
+     FROM users
      WHERE role = 'vet' AND status = 'pending'
      ORDER BY created_at DESC");
 
-// ── Today's reminder log ──────────────
-$today_reminders = mysqli_query($conn,
-    "SELECT r.*, 
-            p.name as pet_name,
-            CONCAT(u.first_name,' ',u.last_name) as owner_name,
-            r.reminder_type,
-            r.channel,
-            r.status
-     FROM reminders r
-     JOIN pets p ON r.pet_id = p.id
-     JOIN users u ON r.owner_id = u.id
-     WHERE DATE(r.created_at) = CURDATE()
-     ORDER BY r.created_at DESC
-     LIMIT 10");
+$dashboard_reminders = admin_get_reminder_monitor_items($conn, 7, 10);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -59,26 +34,17 @@ $today_reminders = mysqli_query($conn,
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Admin Dashboard — PetCare HMS</title>
 
-  <!-- Bootstrap 5 -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
-  <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"/>
-  <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-  <!-- Admin CSS -->
   <link href="../assets/css/admin.css" rel="stylesheet"/>
 </head>
 <body>
 
 <div class="admin-wrapper">
-
-    <!-- Sidebar -->
     <?php include 'includes/sidebar.php'; ?>
 
-    <!-- Main Content -->
     <div class="admin-main">
-
-        <!-- Top bar -->
         <div class="admin-topbar">
             <h1 class="admin-page-title">Admin Dashboard</h1>
             <p class="admin-page-sub">System overview — PetCare HMS</p>
@@ -90,19 +56,15 @@ $today_reminders = mysqli_query($conn,
             </div>
         </div>
 
-        <!-- Alert if pending approvals -->
         <?php if ($pending_count > 0): ?>
         <div class="admin-alert-warning">
             <i class="bi bi-exclamation-triangle-fill me-2"></i>
-            <?= $pending_count ?> new vet registration<?= $pending_count > 1 ? 's are' : ' is' ?> 
-            pending approval — 
+            <?= $pending_count ?> new vet registration<?= $pending_count > 1 ? 's are' : ' is' ?> pending approval —
             <a href="vet_registrations.php?status=pending">review documents now</a>
         </div>
         <?php endif; ?>
 
-        <!-- Stat Cards -->
         <div class="stats-grid">
-
             <a class="stat-card stat-link-card" href="manage_vets.php" aria-label="Open manage vets">
                 <div class="stat-number"><?= $total_vets ?></div>
                 <div class="stat-label">Total vets</div>
@@ -115,10 +77,10 @@ $today_reminders = mysqli_query($conn,
                 <div class="stat-sub text-success">Registered</div>
             </a>
 
-            <a class="stat-card stat-link-card" href="reminder_logs.php" aria-label="Open reminder logs">
+            <a class="stat-card stat-link-card" href="manage_pets.php" aria-label="Open manage pets">
                 <div class="stat-number"><?= $total_pets ?></div>
                 <div class="stat-label">Total pets</div>
-                <div class="stat-sub text-muted">View logs</div>
+                <div class="stat-sub text-muted">Registered</div>
             </a>
 
             <a class="stat-card stat-card-warning stat-link-card" href="vet_registrations.php?status=pending" aria-label="Open pending vet approvals">
@@ -126,10 +88,8 @@ $today_reminders = mysqli_query($conn,
                 <div class="stat-label">Pending approvals</div>
                 <div class="stat-sub text-warning">Review now</div>
             </a>
-
         </div>
 
-        <!-- Pending Vet Approvals Table -->
         <div class="admin-card mt-4">
             <div class="admin-card-header">
                 <h5 class="admin-card-title">Pending vet approvals</h5>
@@ -150,33 +110,17 @@ $today_reminders = mysqli_query($conn,
                         <?php if (mysqli_num_rows($pending_vets) > 0): ?>
                             <?php while ($vet = mysqli_fetch_assoc($pending_vets)): ?>
                             <tr>
-                                <td>
-                                    <strong>
-                                        Dr. <?= htmlspecialchars($vet['first_name']) ?>
-                                        <?= htmlspecialchars($vet['last_name']) ?>
-                                    </strong>
-                                </td>
+                                <td><strong>Dr. <?= htmlspecialchars($vet['first_name']) ?> <?= htmlspecialchars($vet['last_name']) ?></strong></td>
                                 <td><?= htmlspecialchars($vet['clinic_name']) ?></td>
                                 <td><?= date('M j, Y', strtotime($vet['created_at'])) ?></td>
-                                <td>
-                                    <span class="badge-docs"><?= (int)$vet['vet_registration_attempts'] ?>/3</span>
-                                </td>
-                                <td>
-                                    <span class="badge-docs">Docs uploaded</span>
-                                </td>
-                                <td>
-                                    <a href="vet_registrations.php?id=<?= $vet['id'] ?>"
-                                       class="btn-review">
-                                        Review & Approve
-                                    </a>
-                                </td>
+                                <td><span class="badge-docs"><?= (int)$vet['vet_registration_attempts'] ?>/3</span></td>
+                                <td><span class="badge-docs">Docs uploaded</span></td>
+                                <td><a href="vet_registrations.php?id=<?= $vet['id'] ?>" class="btn-review">Review & Approve</a></td>
                             </tr>
                             <?php endwhile; ?>
                         <?php else: ?>
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-4">
-                                    No pending approvals 🎉
-                                </td>
+                                <td colspan="6" class="text-center text-muted py-4">No pending approvals 🎉</td>
                             </tr>
                         <?php endif; ?>
                     </tbody>
@@ -184,10 +128,13 @@ $today_reminders = mysqli_query($conn,
             </div>
         </div>
 
-        <!-- Today's Reminder Log -->
         <div class="admin-card mt-4">
-            <div class="admin-card-header">
-                <h5 class="admin-card-title">Today's reminder log</h5>
+            <div class="admin-card-header d-flex align-items-center justify-content-between gap-3">
+                <div>
+                    <h5 class="admin-card-title mb-1">Upcoming reminders - next 7 days</h5>
+                    <p class="admin-page-sub mb-0">Read-only monitor for vaccination, deworming and treatment follow-ups</p>
+                </div>
+                <a href="reminder_logs.php" class="btn-review">View all</a>
             </div>
             <div class="table-responsive">
                 <table class="admin-table">
@@ -195,48 +142,40 @@ $today_reminders = mysqli_query($conn,
                         <tr>
                             <th>PET</th>
                             <th>OWNER</th>
+                            <th>VET</th>
                             <th>TYPE</th>
-                            <th>CHANNEL</th>
-                            <th>RESULT</th>
+                            <th>DETAIL</th>
+                            <th>DUE DATE</th>
+                            <th>DUE STATUS</th>
+                            <th>REMINDER</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php if (mysqli_num_rows($today_reminders) > 0): ?>
-                            <?php while ($log = mysqli_fetch_assoc($today_reminders)): ?>
+                        <?php if (count($dashboard_reminders) > 0): ?>
+                            <?php foreach ($dashboard_reminders as $item): ?>
                             <tr>
-                                <td><strong><?= htmlspecialchars($log['pet_name']) ?></strong></td>
-                                <td><?= htmlspecialchars($log['owner_name']) ?></td>
-                                <td><?= ucfirst($log['reminder_type']) ?></td>
-                                <td><?= strtoupper($log['channel']) ?></td>
-                                <td>
-                                    <?php if ($log['status'] === 'sent'): ?>
-                                        <span class="badge-sent">Sent</span>
-                                    <?php elseif ($log['status'] === 'failed'): ?>
-                                        <span class="badge-failed">Failed</span>
-                                    <?php else: ?>
-                                        <span class="badge-pending">Pending</span>
-                                    <?php endif; ?>
-                                </td>
+                                <td><strong><?= htmlspecialchars($item['pet_name'] ?: 'Unknown pet') ?></strong></td>
+                                <td><?= htmlspecialchars($item['owner_name']) ?></td>
+                                <td><?= htmlspecialchars($item['vet_name'] !== 'Not assigned' ? 'Dr. ' . $item['vet_name'] : 'Not assigned') ?></td>
+                                <td><?= htmlspecialchars(admin_reminder_type_label($item['record_type'])) ?></td>
+                                <td><?= htmlspecialchars($item['title'] ?: '-') ?></td>
+                                <td><?= htmlspecialchars(admin_format_date($item['due_date'])) ?></td>
+                                <td><span class="<?= htmlspecialchars($item['due_status_class']) ?>"><?= htmlspecialchars($item['due_status_label']) ?></span></td>
+                                <td><?= admin_reminder_status_badge($item['reminder_status']) ?></td>
                             </tr>
-                            <?php endwhile; ?>
+                            <?php endforeach; ?>
                         <?php else: ?>
                             <tr>
-                                <td colspan="5" class="text-center text-muted py-4">
-                                    No reminders sent today
-                                </td>
+                                <td colspan="8" class="text-center text-muted py-4">No reminders due in the next 7 days</td>
                             </tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
             </div>
         </div>
+    </div>
+</div>
 
-    </div><!-- /admin-main -->
-
-</div><!-- /admin-wrapper -->
-
-<!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
 </body>
 </html>
