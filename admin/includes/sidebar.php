@@ -36,6 +36,13 @@
             <span>Manage owners</span>
         </a>
 
+        <a href="manage_pets.php"
+           class="sidebar-link <?= $active_page === 'manage_pets' ? 'active' : '' ?>">
+            <i class="bi bi-people-fill"></i>
+            <span>Manage pets</span>
+        </a>
+
+
         <p class="sidebar-section-label">SYSTEM</p>
 
         <a href="reminder_logs.php"
