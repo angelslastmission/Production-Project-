@@ -5,6 +5,10 @@
 session_start();
 include '../config.php';
 include 'includes/auth.php';
+include 'includes/reminder_helper.php';
+
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 
 $active_page = 'patients';
 
@@ -18,7 +22,6 @@ if ($vet_id <= 0) {
 $search_query = $_GET['search'] ?? '';
 $filter_species = $_GET['species'] ?? '';
 $filter_status = $_GET['status'] ?? '';
-$filter_vaccine = $_GET['vaccine_status'] ?? '';
 
 // ── Build pets query with filters ────
 $where_conditions = [];
@@ -45,7 +48,7 @@ $where_clause = !empty($where_conditions) ? 'WHERE ' . implode(' AND ', $where_c
 
 // ── Fetch all pets with owner info ───
 $pets_query = "
-    SELECT p.id, p.name, p.species, p.breed, p.dob, p.status, p.vaccination_status, p.vaccination_type,
+    SELECT p.id, p.name, p.species, p.breed, p.dob, p.status, p.last_visit,
            u.id as owner_id, CONCAT(u.first_name, ' ', u.last_name) as owner_name,
            u.email as owner_email
     FROM pets p
@@ -75,45 +78,142 @@ function calculate_age($dob) {
     }
 }
 
-function normalize_vaccination_status($status) {
-    $status = (string)$status;
-    if ($status === 'vaccinated') {
-        return 'up-to-date';
+
+
+// ── Helper: Pick patient-page care summary record ────────────
+// Priority: nearest upcoming date -> latest overdue date -> latest active record without date.
+function petcura_fetch_patient_due_record($conn, $table, $name_column, $date_column, $pet_id, $vet_id) {
+    $allowed_tables = ['vaccinations', 'dewormings', 'treatments'];
+    $allowed_columns = ['vaccine_name', 'product_name', 'diagnosis', 'next_due_date', 'followup_date', 'date_given', 'treatment_date'];
+
+    if (!in_array($table, $allowed_tables, true) || !in_array($name_column, $allowed_columns, true) || !in_array($date_column, $allowed_columns, true)) {
+        return null;
     }
 
-    $allowed = ['not-vaccinated', 'in-progress', 'up-to-date', 'overdue'];
-    return in_array($status, $allowed, true) ? $status : 'not-vaccinated';
-}
+    $status_column = $table === 'treatments' ? 'followup_status' : 'reminder_status';
+    $main_date_column = $table === 'treatments' ? 'treatment_date' : 'date_given';
+    $name_expr = $table === 'treatments'
+        ? "COALESCE(NULLIF(TRIM($name_column), ''), 'Treatment') AS record_name"
+        : "$name_column AS record_name";
 
-function vaccination_status_display($status) {
-    $normalized = normalize_vaccination_status($status);
+    // 1) First show the nearest upcoming due/follow-up date.
+    $sql = "SELECT $name_expr, $main_date_column AS record_date, $date_column AS due_date
+            FROM $table
+            WHERE pet_id = ?
+              AND vet_id = ?
+              AND $status_column = 'active'
+              AND $date_column IS NOT NULL
+              AND $date_column <> '0000-00-00'
+              AND $date_column >= CURDATE()
+            ORDER BY $date_column ASC, id DESC
+            LIMIT 1";
 
-    if ($normalized === 'up-to-date') {
-        return ['label' => 'Vaccinated (Up to date)', 'class' => 'vet-pill-updated'];
-    }
-    if ($normalized === 'in-progress') {
-        return ['label' => 'Vaccination in progress', 'class' => 'vet-pill-soon'];
-    }
-    if ($normalized === 'overdue') {
-        return ['label' => 'Booster overdue', 'class' => 'vet-pill-overdue'];
+    $stmt = mysqli_prepare($conn, $sql);
+    if ($stmt) {
+        mysqli_stmt_bind_param($stmt, 'ii', $pet_id, $vet_id);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
+        $row = $result ? mysqli_fetch_assoc($result) : null;
+        mysqli_stmt_close($stmt);
+        if ($row) {
+            return $row;
+        }
     }
 
-    return ['label' => 'Not vaccinated', 'class' => 'vet-pill-overdue'];
+    // 2) If there is no upcoming date, show the latest overdue active due/follow-up.
+    $sql = "SELECT $name_expr, $main_date_column AS record_date, $date_column AS due_date
+            FROM $table
+            WHERE pet_id = ?
+              AND vet_id = ?
+              AND $status_column = 'active'
+              AND $date_column IS NOT NULL
+              AND $date_column <> '0000-00-00'
+              AND $date_column < CURDATE()
+            ORDER BY $date_column DESC, id DESC
+            LIMIT 1";
+
+    $stmt = mysqli_prepare($conn, $sql);
+    if ($stmt) {
+        mysqli_stmt_bind_param($stmt, 'ii', $pet_id, $vet_id);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
+        $row = $result ? mysqli_fetch_assoc($result) : null;
+        mysqli_stmt_close($stmt);
+        if ($row) {
+            return $row;
+        }
+    }
+
+    // 3) If all active records have no due/follow-up date, show latest active record as No date.
+    $sql = "SELECT $name_expr, $main_date_column AS record_date, $date_column AS due_date
+            FROM $table
+            WHERE pet_id = ?
+              AND vet_id = ?
+              AND $status_column = 'active'
+            ORDER BY $main_date_column DESC, id DESC
+            LIMIT 1";
+
+    $stmt = mysqli_prepare($conn, $sql);
+    if ($stmt) {
+        mysqli_stmt_bind_param($stmt, 'ii', $pet_id, $vet_id);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
+        $row = $result ? mysqli_fetch_assoc($result) : null;
+        mysqli_stmt_close($stmt);
+        if ($row) {
+            return $row;
+        }
+    }
+
+    return null;
 }
 
 // ── Build pets array with processed data
 while ($pet = mysqli_fetch_assoc($pets_result)) {
-    $pet['vaccination_status'] = normalize_vaccination_status($pet['vaccination_status'] ?? 'not-vaccinated');
-    $pet['vaccination_display'] = vaccination_status_display($pet['vaccination_status']);
+    $pet_id = (int)$pet['id'];
+
+    // Patient page care summary must show:
+    // 1) nearest upcoming date, 2) latest overdue date, 3) no date if there is no due/follow-up date.
+    $vacc_row = petcura_fetch_patient_due_record($conn, 'vaccinations', 'vaccine_name', 'next_due_date', $pet_id, $vet_id);
+    $latest_vaccination_name = $vacc_row ? (string)($vacc_row['record_name'] ?? '') : '';
+    $latest_vaccination_due = $vacc_row ? (string)($vacc_row['due_date'] ?? '') : '';
+
+    $deworm_row = petcura_fetch_patient_due_record($conn, 'dewormings', 'product_name', 'next_due_date', $pet_id, $vet_id);
+    $latest_deworming_name = $deworm_row ? (string)($deworm_row['record_name'] ?? '') : '';
+    $latest_deworming_due = $deworm_row ? (string)($deworm_row['due_date'] ?? '') : '';
+
+    $vacc_status = petcura_due_status($latest_vaccination_due);
+    if ($vacc_status['key'] === 'no-date') {
+        $vacc_status = ['label' => 'No due date', 'class' => 'vet-pill-status'];
+    }
+
+    $deworm_status = petcura_due_status($latest_deworming_due);
+    if ($deworm_status['key'] === 'no-date') {
+        $deworm_status = ['label' => 'No due date', 'class' => 'vet-pill-status'];
+    }
+
+    $treat_row = petcura_fetch_patient_due_record($conn, 'treatments', 'diagnosis', 'followup_date', $pet_id, $vet_id);
+    $latest_treatment_title = $treat_row ? (string)($treat_row['record_name'] ?? '') : '';
+    $latest_treatment_date = $treat_row ? (string)($treat_row['record_date'] ?? '') : '';
+    $latest_followup_due = $treat_row ? (string)($treat_row['due_date'] ?? '') : '';
+
+    $treatment_status = petcura_due_status($latest_followup_due);
+    if ($treatment_status['key'] === 'no-date') {
+        $treatment_status = ['label' => 'No follow-up', 'class' => 'vet-pill-status'];
+    }
+
+    $pet['vaccination_display'] = $vacc_status;
+    $pet['deworming_display'] = $deworm_status;
+    $pet['treatment_display'] = $treatment_status;
+    $pet['latest_vaccination_name'] = $latest_vaccination_name;
+    $pet['latest_vaccination_due'] = $latest_vaccination_due;
+    $pet['latest_deworming_name'] = $latest_deworming_name;
+    $pet['latest_deworming_due'] = $latest_deworming_due;
+    $pet['latest_treatment_title'] = $latest_treatment_title;
+    $pet['latest_treatment_date'] = $latest_treatment_date;
+    $pet['latest_followup_due'] = $latest_followup_due;
     $pet['age'] = calculate_age($pet['dob']);
     $pets[] = $pet;
-}
-
-// ── Apply vaccine status filter ──────
-if (!empty($filter_vaccine)) {
-    $pets = array_filter($pets, function($pet) use ($filter_vaccine) {
-        return normalize_vaccination_status($pet['vaccination_status'] ?? 'not-vaccinated') === $filter_vaccine;
-    });
 }
 
 ?>
@@ -159,14 +259,6 @@ if (!empty($filter_vaccine)) {
                 <option value="Recovering" <?= $filter_status === 'Recovering' ? 'selected' : '' ?>>Recovering</option>
             </select>
 
-            <select class="patients-select" name="vaccine_status" onchange="this.form.submit()">
-                <option value="">All vaccine statuses</option>
-                <option value="not-vaccinated" <?= $filter_vaccine === 'not-vaccinated' ? 'selected' : '' ?>>Not vaccinated</option>
-                <option value="in-progress" <?= $filter_vaccine === 'in-progress' ? 'selected' : '' ?>>Vaccination in progress</option>
-                <option value="up-to-date" <?= $filter_vaccine === 'up-to-date' ? 'selected' : '' ?>>Vaccinated (Up to date)</option>
-                <option value="overdue" <?= $filter_vaccine === 'overdue' ? 'selected' : '' ?>>Booster overdue</option>
-            </select>
-
             <a href="register_pet.php" class="patients-add-btn">
                 <i class="bi bi-plus-lg"></i>
                 <span>Register new pet</span>
@@ -182,8 +274,9 @@ if (!empty($filter_vaccine)) {
                             <th>Species</th>
                             <th>Breed</th>
                             <th>Age</th>
+                            <th>Last visit</th>
                             <th>Owner</th>
-                            <th>Vaccine status</th>
+                            <th>Care summary</th>
                             <th>Health</th>
                             <th></th>
                         </tr>
@@ -191,7 +284,7 @@ if (!empty($filter_vaccine)) {
                     <tbody>
                         <?php if (empty($pets)): ?>
                         <tr>
-                            <td colspan="8" class="text-center py-4 text-muted">
+                            <td colspan="9" class="text-center py-4 text-muted">
                                 <i class="bi bi-inbox me-2"></i>
                                 No patients found
                             </td>
@@ -203,6 +296,7 @@ if (!empty($filter_vaccine)) {
                                 <td><?= htmlspecialchars($pet['species']) ?></td>
                                 <td><?= htmlspecialchars($pet['breed'] ?? 'N/A') ?></td>
                                 <td><?= $pet['age'] ?></td>
+                                <td><?= !empty($pet['last_visit']) ? htmlspecialchars(date('M d, Y', strtotime($pet['last_visit']))) : 'N/A' ?></td>
                                 <td>
                                     <div class="small">
                                         <strong><?= htmlspecialchars($pet['owner_name']) ?></strong>
@@ -211,9 +305,43 @@ if (!empty($filter_vaccine)) {
                                     </div>
                                 </td>
                                 <td>
-                                    <span class="vet-pill <?= $pet['vaccination_display']['class'] ?>">
-                                        <?= $pet['vaccination_display']['label'] ?>
-                                    </span>
+                                    <div class="care-summary-flex">
+                                        <div class="care-summary-item">
+                                            <span class="care-summary-label">Vaccine</span>
+                                            <span class="vet-pill <?= $pet['vaccination_display']['class'] ?>"><?= htmlspecialchars($pet['vaccination_display']['label']) ?></span>
+                                            <span class="care-summary-detail">
+                                                <?= htmlspecialchars($pet['latest_vaccination_name'] !== '' ? $pet['latest_vaccination_name'] : 'No record') ?>
+                                                <?php if (!empty($pet['latest_vaccination_due'])): ?>
+                                                    • <?= htmlspecialchars(date('M d, Y', strtotime($pet['latest_vaccination_due']))) ?>
+                                                <?php endif; ?>
+                                            </span>
+                                        </div>
+                                        <div class="care-summary-divider"></div>
+                                        <div class="care-summary-item">
+                                            <span class="care-summary-label">Deworm</span>
+                                            <span class="vet-pill <?= $pet['deworming_display']['class'] ?>"><?= htmlspecialchars($pet['deworming_display']['label']) ?></span>
+                                            <span class="care-summary-detail">
+                                                <?= htmlspecialchars($pet['latest_deworming_name'] !== '' ? $pet['latest_deworming_name'] : 'No record') ?>
+                                                <?php if (!empty($pet['latest_deworming_due'])): ?>
+                                                    • <?= htmlspecialchars(date('M d, Y', strtotime($pet['latest_deworming_due']))) ?>
+                                                <?php endif; ?>
+                                            </span>
+                                        </div>
+                                        <div class="care-summary-divider"></div>
+                                        <div class="care-summary-item">
+                                            <span class="care-summary-label">Treatment</span>
+                                            <span class="vet-pill <?= $pet['treatment_display']['class'] ?>"><?= htmlspecialchars($pet['treatment_display']['label']) ?></span>
+                                            <span class="care-summary-detail">
+                                                <?= htmlspecialchars($pet['latest_treatment_title'] !== '' ? $pet['latest_treatment_title'] : 'No treatment record') ?>
+                                                <?php if (!empty($pet['latest_treatment_date'])): ?>
+                                                    • Last: <?= htmlspecialchars(date('M d, Y', strtotime($pet['latest_treatment_date']))) ?>
+                                                <?php endif; ?>
+                                                <?php if (!empty($pet['latest_followup_due'])): ?>
+                                                    • Follow-up: <?= htmlspecialchars(date('M d, Y', strtotime($pet['latest_followup_due']))) ?>
+                                                <?php endif; ?>
+                                            </span>
+                                        </div>
+                                    </div>
                                 </td>
                                 <td>
                                     <span class="vet-pill vet-health-<?= strtolower(str_replace(' ', '-', $pet['status'])) ?>">
