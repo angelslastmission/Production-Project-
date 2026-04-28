@@ -1,9 +1,9 @@
 <?php
 session_start();
-include '../config.php';
-include 'includes/auth.php';
+include __DIR__ . '/../config.php';
+include __DIR__ . '/includes/auth.php';
 include 'includes/reminder_monitor_helper.php';
-require_once '../includes/petcura_mailer.php';
+require_once __DIR__ . '/../includes/petcura_mailer.php';
 
 $active_page = 'send_email_reminders';
 
