@@ -79,6 +79,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $vet_id > 0) {
 
         if (!$pet_check || mysqli_num_rows($pet_check) === 0) {
             $error = 'Invalid patient selected.';
+        } else {
+            $pet_row = mysqli_fetch_assoc($pet_check);
         }
     }
 
@@ -162,7 +164,8 @@ $treatments = [];
 if ($vet_id > 0) {
     $list_where = "t.vet_id = $vet_id AND t.followup_status = 'active'";
     if ($view_mode === 'followups') {
-        $list_where .= " AND t.followup_date IS NOT NULL AND t.followup_date >= CURDATE()";
+        // Show all active follow-ups, including overdue ones.
+        $list_where .= " AND t.followup_date IS NOT NULL";
     }
 
     $treatment_query = mysqli_query(
