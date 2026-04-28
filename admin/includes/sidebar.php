@@ -48,7 +48,19 @@
         <a href="reminder_logs.php"
            class="sidebar-link <?= $active_page === 'reminder_logs' ? 'active' : '' ?>">
             <i class="bi bi-bell-fill"></i>
-            <span>Reminder logs</span>
+            <span>Reminder monitor</span>
+        </a>
+
+        <a href="send_reminder_emails.php"
+           class="sidebar-link <?= $active_page === 'send_email_reminders' ? 'active' : '' ?>">
+            <i class="bi bi-send-fill"></i>
+            <span>Send email reminders</span>
+        </a>
+
+        <a href="email_reminder_logs.php"
+           class="sidebar-link <?= $active_page === 'email_reminder_logs' ? 'active' : '' ?>">
+            <i class="bi bi-envelope-check-fill"></i>
+            <span>Email logs</span>
         </a>
 
         <a href="settings.php"
