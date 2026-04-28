@@ -83,7 +83,13 @@ function admin_filter_link($key, $label, $count, $current) {
                 <h1 class="admin-page-title">Reminder monitor</h1>
                 <p class="admin-page-sub">Read-only overview of vaccination, deworming and treatment follow-up reminders</p>
             </div>
-            <div class="topbar-right">
+            <div class="topbar-right d-flex flex-wrap gap-2 align-items-center">
+                <a href="send_reminder_emails.php" class="btn btn-dark btn-sm">
+                    <i class="bi bi-send-fill me-1"></i> Send Email Reminders
+                </a>
+                <a href="email_reminder_logs.php" class="btn btn-outline-dark btn-sm">
+                    <i class="bi bi-envelope-check me-1"></i> Email Logs
+                </a>
                 <span class="topbar-user">
                     <i class="bi bi-person-circle me-2"></i>
                     <?= htmlspecialchars($_SESSION['user_name']) ?>

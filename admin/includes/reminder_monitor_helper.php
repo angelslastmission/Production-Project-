@@ -135,18 +135,49 @@ if (!function_exists('admin_latest_reminder_info')) {
 
         $record_type = (string)($item['record_type'] ?? '');
         $record_id = (int)($item['record_id'] ?? 0);
-        $pet_id = (int)($item['pet_id'] ?? 0);
-        $owner_id = (int)($item['owner_id'] ?? 0);
-        $vet_id = (int)($item['vet_id'] ?? 0);
-        $legacy_type = $record_type === 'treatment' ? 'followup' : $record_type;
 
+        /*
+         * For the admin monitor, email logs are the source of truth.
+         * Old vet "Send now" notifications may have marked reminders.status = sent
+         * without actually sending an email, so do not trust reminders.status alone.
+         */
+        if ($record_id > 0 && admin_column_exists($conn, 'reminder_email_logs', 'record_type')) {
+            $stmt = mysqli_prepare(
+                $conn,
+                "SELECT status, sent_at, message_preview, error_message
+                 FROM reminder_email_logs
+                 WHERE record_type = ?
+                   AND record_id = ?
+                 ORDER BY sent_at DESC, id DESC
+                 LIMIT 1"
+            );
+            if ($stmt) {
+                mysqli_stmt_bind_param($stmt, 'si', $record_type, $record_id);
+                mysqli_stmt_execute($stmt);
+                $result = mysqli_stmt_get_result($stmt);
+                $row = $result ? mysqli_fetch_assoc($result) : null;
+                mysqli_stmt_close($stmt);
+
+                if ($row) {
+                    return [
+                        'status' => $row['status'] === 'failed' ? 'failed' : 'sent',
+                        'channel' => 'email',
+                        'sent_at' => $row['sent_at'] ?? '',
+                        'created_at' => $row['sent_at'] ?? '',
+                        'message' => ($row['status'] === 'failed' ? ($row['error_message'] ?? '') : ($row['message_preview'] ?? ''))
+                    ];
+                }
+            }
+        }
+
+        // If no email log exists yet, show not_sent. Keep created_at only for reference.
         if (admin_reminders_advanced_supported($conn) && $record_id > 0) {
             $stmt = mysqli_prepare(
                 $conn,
-                "SELECT status, channel, sent_at, created_at, message
+                "SELECT created_at, message
                  FROM reminders
                  WHERE record_type = ? AND record_id = ?
-                 ORDER BY COALESCE(sent_at, created_at) DESC, id DESC
+                 ORDER BY created_at DESC, id DESC
                  LIMIT 1"
             );
             if ($stmt) {
@@ -156,34 +187,15 @@ if (!function_exists('admin_latest_reminder_info')) {
                 $row = $result ? mysqli_fetch_assoc($result) : null;
                 mysqli_stmt_close($stmt);
                 if ($row) {
-                    return array_merge($default, $row);
+                    $default['created_at'] = $row['created_at'] ?? '';
+                    $default['message'] = $row['message'] ?? '';
                 }
-            }
-        }
-
-        $stmt = mysqli_prepare(
-            $conn,
-            "SELECT status, channel, sent_at, created_at, message
-             FROM reminders
-             WHERE reminder_type = ? AND pet_id = ? AND owner_id = ? AND vet_id = ?
-             ORDER BY COALESCE(sent_at, created_at) DESC, id DESC
-             LIMIT 1"
-        );
-        if ($stmt) {
-            mysqli_stmt_bind_param($stmt, 'siii', $legacy_type, $pet_id, $owner_id, $vet_id);
-            mysqli_stmt_execute($stmt);
-            $result = mysqli_stmt_get_result($stmt);
-            $row = $result ? mysqli_fetch_assoc($result) : null;
-            mysqli_stmt_close($stmt);
-            if ($row) {
-                return array_merge($default, $row);
             }
         }
 
         return $default;
     }
 }
-
 if (!function_exists('admin_get_reminder_monitor_items')) {
     function admin_get_reminder_monitor_items($conn, $days = null, $limit = 300)
     {
