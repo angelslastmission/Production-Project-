@@ -16,14 +16,35 @@ if ($vet_id <= 0) {
 }
 
 $status_filter = trim((string)($_GET['status'] ?? 'all'));
-$allowed_filters = ['all', 'due_today', 'due_soon', 'overdue', 'upcoming'];
+$allowed_filters = ['all', 'due_today', 'due_soon', 'due_week', 'overdue', 'upcoming'];
 if (!in_array($status_filter, $allowed_filters, true)) {
     $status_filter = 'all';
 }
 
+$type_filter = trim((string)($_GET['type'] ?? 'all'));
+$allowed_type_filters = ['all', 'vaccine_deworming', 'treatment'];
+if (!in_array($type_filter, $allowed_type_filters, true)) {
+    $type_filter = 'all';
+}
+
+function vet_reminder_query(array $extra = []): string
+{
+    $params = [
+        'status' => $GLOBALS['status_filter'] ?? 'all',
+        'type' => $GLOBALS['type_filter'] ?? 'all'
+    ];
+    foreach ($extra as $key => $value) {
+        $params[$key] = $value;
+    }
+    return http_build_query($params);
+}
+
 // Flash success message from redirect
 if (!empty($_GET['sent'])) {
-    $success = 'Reminder sent successfully.';
+    $success = 'Owner notification sent successfully.';
+}
+if (!empty($_GET['already_sent'])) {
+    $success = 'Owner notification was already sent for this reminder.';
 }
 
 function map_reminder_type($record_type)
@@ -37,18 +58,62 @@ function map_reminder_type($record_type)
     return 'followup';
 }
 
-function insert_owner_notification($conn, $owner_id, $pet_id, $pet_name, $reminder_type, $message) {
+function vet_notification_payload($pet_name, $reminder_type, $title_text): array {
     $title = $pet_name . ' — ' . ucfirst($reminder_type) . ' reminder';
     $type  = ($reminder_type === 'vaccination' || $reminder_type === 'deworming') ? 'reminder' : 'followup';
-    $stmt  = mysqli_prepare($conn,
+    $message = 'Manual reminder sent by vet for ' . $pet_name . ' - ' . $title_text . '.';
+    return [$title, $type, $message];
+}
+
+function owner_notification_exists($conn, $owner_id, $pet_id, $pet_name, $reminder_type, $title_text): bool {
+    [$title, $type, $message] = vet_notification_payload($pet_name, $reminder_type, $title_text);
+
+    $stmt = mysqli_prepare(
+        $conn,
+        "SELECT id FROM notifications
+         WHERE user_id = ?
+           AND pet_id = ?
+           AND title = ?
+           AND message = ?
+           AND type = ?
+         LIMIT 1"
+    );
+
+    if (!$stmt) {
+        return false;
+    }
+
+    mysqli_stmt_bind_param($stmt, 'iisss', $owner_id, $pet_id, $title, $message, $type);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $exists = $result && mysqli_fetch_assoc($result);
+    mysqli_stmt_close($stmt);
+
+    return (bool)$exists;
+}
+
+function insert_owner_notification($conn, $owner_id, $pet_id, $pet_name, $reminder_type, $title_text): bool {
+    [$title, $type, $message] = vet_notification_payload($pet_name, $reminder_type, $title_text);
+
+    if (owner_notification_exists($conn, $owner_id, $pet_id, $pet_name, $reminder_type, $title_text)) {
+        return false;
+    }
+
+    $stmt = mysqli_prepare(
+        $conn,
         "INSERT INTO notifications (user_id, pet_id, title, message, type, is_read, created_at)
          VALUES (?, ?, ?, ?, ?, 0, NOW())"
     );
-    if ($stmt) {
-        mysqli_stmt_bind_param($stmt, 'iisss', $owner_id, $pet_id, $title, $message, $type);
-        mysqli_stmt_execute($stmt);
-        mysqli_stmt_close($stmt);
+
+    if (!$stmt) {
+        return false;
     }
+
+    mysqli_stmt_bind_param($stmt, 'iisss', $owner_id, $pet_id, $title, $message, $type);
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+
+    return (bool)$ok;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -124,120 +189,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $reminder_type = map_reminder_type($record_type);
                     $message = 'Manual reminder sent by vet for ' . $pet_name . ' - ' . $title . '.';
 
-                    if (petcura_reminders_advanced_supported($conn)) {
-                        // Update the existing PENDING reminder row for this specific record.
-                        // We only match record_type exactly and only if it's still pending —
-                        // this prevents accidentally marking other rows as sent.
-                        $update_stmt = mysqli_prepare(
-                            $conn,
-                            "UPDATE reminders
-                             SET status = 'sent',
-                                 sent_at = NOW(),
-                                 message = ?,
-                                 record_type = ?,
-                                 event_due_date_sent = 1
-                             WHERE vet_id = ?
-                               AND pet_id = ?
-                               AND record_id = ?
-                               AND record_type = ?
-                               AND status = 'pending'
-                             LIMIT 1"
-                        );
+                    // Vet Send Now sends ONLY a website notification.
+                    // It must not send email and must not change email reminder flags.
+                    $notification_added = insert_owner_notification(
+                        $conn,
+                        $owner_id,
+                        $pet_id,
+                        $pet_name,
+                        $reminder_type,
+                        $title
+                    );
 
-                        if ($update_stmt) {
-                            mysqli_stmt_bind_param(
-                                $update_stmt,
-                                'ssiiss',
-                                $message,
-                                $record_type,
-                                $vet_id,
-                                $pet_id,
-                                $record_id,
-                                $record_type
-                            );
-                            mysqli_stmt_execute($update_stmt);
-                            $updated_rows = mysqli_stmt_affected_rows($update_stmt);
-                            mysqli_stmt_close($update_stmt);
-
-                            if ($updated_rows > 0) {
-                                insert_owner_notification($conn, $owner_id, $pet_id, $pet_name, $reminder_type, $message);
-                                header('Location: reminders.php?status=' . urlencode($status_filter) . '&sent=1&scroll_to=' . $record_type . '-' . $record_id);
-                                exit();
-                            } else {
-                                // If no auto-reminder row exists, save a new sent log safely.
-                                $insert_stmt = mysqli_prepare(
-                                    $conn,
-                                    "INSERT INTO reminders (
-                                        pet_id, owner_id, vet_id, reminder_type, reminder_date, channel, status, message, sent_at, created_at,
-                                        record_type, record_id, next_due_date,
-                                        reminder_7_days, reminder_1_day, reminder_due_date, reminder_1_day_after,
-                                        event_7_days_sent, event_1_day_sent, event_due_date_sent, event_1_day_after_sent
-                                    ) VALUES (?, ?, ?, ?, ?, 'email', 'sent', ?, NOW(), NOW(), ?, ?, ?, NULL, NULL, NULL, NULL, 0, 0, 1, 0)"
-                                );
-
-                                if ($insert_stmt) {
-                                    $reminder_date = ($due_date !== '') ? $due_date : date('Y-m-d');
-                                    $next_due_dt = petcura_to_datetime($due_date, '06:00:00');
-                                    mysqli_stmt_bind_param(
-                                        $insert_stmt,
-                                        'iiissssis',
-                                        $pet_id,
-                                        $owner_id,
-                                        $vet_id,
-                                        $reminder_type,
-                                        $reminder_date,
-                                        $message,
-                                        $record_type,
-                                        $record_id,
-                                        $next_due_dt
-                                    );
-                                    if (mysqli_stmt_execute($insert_stmt)) {
-                                        insert_owner_notification($conn, $owner_id, $pet_id, $pet_name, $reminder_type, $message);
-                                        header('Location: reminders.php?status=' . urlencode($status_filter) . '&sent=1&scroll_to=' . $record_type . '-' . $record_id);
-                                        exit();
-                                    } else {
-                                        $error = 'Failed to save reminder log: ' . mysqli_stmt_error($insert_stmt);
-                                    }
-                                    mysqli_stmt_close($insert_stmt);
-                                } else {
-                                    $error = 'Failed to prepare reminder insert: ' . mysqli_error($conn);
-                                }
-                            }
-                        } else {
-                            $error = 'Failed to prepare reminder update: ' . mysqli_error($conn);
-                        }
-                    } else {
-                        $insert_stmt = mysqli_prepare(
-                            $conn,
-                            "INSERT INTO reminders (
-                                pet_id, owner_id, vet_id, reminder_type, reminder_date, channel, status, message, sent_at, created_at
-                            ) VALUES (?, ?, ?, ?, ?, 'email', 'sent', ?, NOW(), NOW())"
-                        );
-
-                        if ($insert_stmt) {
-                            $reminder_date = ($due_date !== '') ? $due_date : date('Y-m-d');
-                            mysqli_stmt_bind_param(
-                                $insert_stmt,
-                                'iiisss',
-                                $pet_id,
-                                $owner_id,
-                                $vet_id,
-                                $reminder_type,
-                                $reminder_date,
-                                $message
-                            );
-                            if (mysqli_stmt_execute($insert_stmt)) {
-                                insert_owner_notification($conn, $owner_id, $pet_id, $pet_name, $reminder_type, $message);
-                                header('Location: reminders.php?status=' . urlencode($status_filter) . '&sent=1&scroll_to=' . $record_type . '-' . $record_id);
-                                exit();
-                            } else {
-                                $error = 'Failed to save reminder log: ' . mysqli_stmt_error($insert_stmt);
-                            }
-                            mysqli_stmt_close($insert_stmt);
-                        } else {
-                            $error = 'Failed to prepare reminder insert: ' . mysqli_error($conn);
-                        }
+                    if ($notification_added) {
+                        header('Location: reminders.php?status=' . urlencode($status_filter) . '&type=' . urlencode($type_filter) . '&sent=1&scroll_to=' . $record_type . '-' . $record_id);
+                        exit();
                     }
+
+                    header('Location: reminders.php?status=' . urlencode($status_filter) . '&type=' . urlencode($type_filter) . '&already_sent=1&scroll_to=' . $record_type . '-' . $record_id);
+                    exit();
                 }
             }
         }
@@ -250,7 +219,7 @@ $vacc_query = mysqli_prepare(
     $conn,
     "SELECT v.id AS record_id, 'vaccination' AS record_type,
             v.vaccine_name AS title, v.next_due_date AS due_date,
-            p.id AS pet_id, p.name AS pet_name,
+            p.id AS pet_id, p.name AS pet_name, p.owner_id,
             CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) AS owner_name,
             u.email AS owner_email
      FROM vaccinations v
@@ -271,12 +240,13 @@ if ($vacc_query) {
             'due_date' => (string)$row['due_date'],
             'pet_id' => (int)$row['pet_id'],
             'pet_name' => (string)$row['pet_name'],
+            'owner_id' => (int)($row['owner_id'] ?? 0),
             'owner_name' => trim((string)$row['owner_name']) !== '' ? trim((string)$row['owner_name']) : 'Unknown',
             'owner_email' => (string)($row['owner_email'] ?? ''),
             'status_key' => $status['key'],
             'status_label' => $status['label'],
             'status_class' => $status['class'],
-            'reminder_sent' => petcura_reminder_sent($conn, 'vaccination', (int)$row['record_id'])
+            'reminder_sent' => owner_notification_exists($conn, (int)($row['owner_id'] ?? 0), (int)$row['pet_id'], (string)$row['pet_name'], 'vaccination', (string)$row['title'])
         ];
     }
     mysqli_stmt_close($vacc_query);
@@ -286,7 +256,7 @@ $deworm_query = mysqli_prepare(
     $conn,
     "SELECT d.id AS record_id, 'deworming' AS record_type,
             d.product_name AS title, d.next_due_date AS due_date,
-            p.id AS pet_id, p.name AS pet_name,
+            p.id AS pet_id, p.name AS pet_name, p.owner_id,
             CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) AS owner_name,
             u.email AS owner_email
      FROM dewormings d
@@ -307,12 +277,13 @@ if ($deworm_query) {
             'due_date' => (string)$row['due_date'],
             'pet_id' => (int)$row['pet_id'],
             'pet_name' => (string)$row['pet_name'],
+            'owner_id' => (int)($row['owner_id'] ?? 0),
             'owner_name' => trim((string)$row['owner_name']) !== '' ? trim((string)$row['owner_name']) : 'Unknown',
             'owner_email' => (string)($row['owner_email'] ?? ''),
             'status_key' => $status['key'],
             'status_label' => $status['label'],
             'status_class' => $status['class'],
-            'reminder_sent' => petcura_reminder_sent($conn, 'deworming', (int)$row['record_id'])
+            'reminder_sent' => owner_notification_exists($conn, (int)($row['owner_id'] ?? 0), (int)$row['pet_id'], (string)$row['pet_name'], 'deworming', (string)$row['title'])
         ];
     }
     mysqli_stmt_close($deworm_query);
@@ -323,7 +294,7 @@ $treat_query = mysqli_prepare(
     "SELECT t.id AS record_id, 'treatment' AS record_type,
             COALESCE(NULLIF(TRIM(t.diagnosis), ''), 'Follow-up') AS title,
             t.followup_date AS due_date,
-            p.id AS pet_id, p.name AS pet_name,
+            p.id AS pet_id, p.name AS pet_name, p.owner_id,
             CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) AS owner_name,
             u.email AS owner_email
      FROM treatments t
@@ -344,12 +315,13 @@ if ($treat_query) {
             'due_date' => (string)$row['due_date'],
             'pet_id' => (int)$row['pet_id'],
             'pet_name' => (string)$row['pet_name'],
+            'owner_id' => (int)($row['owner_id'] ?? 0),
             'owner_name' => trim((string)$row['owner_name']) !== '' ? trim((string)$row['owner_name']) : 'Unknown',
             'owner_email' => (string)($row['owner_email'] ?? ''),
             'status_key' => $status['key'],
             'status_label' => $status['label'],
             'status_class' => $status['class'],
-            'reminder_sent' => petcura_reminder_sent($conn, 'treatment', (int)$row['record_id'])
+            'reminder_sent' => owner_notification_exists($conn, (int)($row['owner_id'] ?? 0), (int)$row['pet_id'], (string)$row['pet_name'], 'followup', (string)$row['title'])
         ];
     }
     mysqli_stmt_close($treat_query);
@@ -361,17 +333,39 @@ usort($items, static function ($a, $b) {
     return $a_date <=> $b_date;
 });
 
-// Count each status (only count unsent items so numbers match what the vet still needs to action)
+// Apply type filter before counting/listing.
+// This keeps dashboard clicks accurate:
+// vaccination/deworming card will not show treatment follow-ups.
+if ($type_filter === 'vaccine_deworming') {
+    $items = array_values(array_filter($items, static function ($item) {
+        return in_array($item['record_type'], ['vaccination', 'deworming'], true);
+    }));
+} elseif ($type_filter === 'treatment') {
+    $items = array_values(array_filter($items, static function ($item) {
+        return $item['record_type'] === 'treatment';
+    }));
+}
+
+// Count each status after type filter.
 $counts = [
     'all'       => 0,
     'due_today' => 0,
     'due_soon'  => 0,
+    'due_week'  => 0,
     'overdue'   => 0,
     'upcoming'  => 0
 ];
 
 foreach ($items as $item) {
     $counts['all']++;
+
+    $due_ts = strtotime((string)$item['due_date']);
+    $today_start = strtotime(date('Y-m-d'));
+    $week_end = strtotime(date('Y-m-d', strtotime('+7 days')) . ' 23:59:59');
+    if ($due_ts && $due_ts >= $today_start && $due_ts <= $week_end) {
+        $counts['due_week']++;
+    }
+
     if ($item['status_key'] === 'due-today') {
         $counts['due_today']++;
     } elseif ($item['status_key'] === 'due-soon') {
@@ -386,11 +380,18 @@ foreach ($items as $item) {
 // Build filtered list for the table (always show all items including sent)
 $filtered = [];
 foreach ($items as $item) {
+    $due_ts = strtotime((string)$item['due_date']);
+    $today_start = strtotime(date('Y-m-d'));
+    $week_end = strtotime(date('Y-m-d', strtotime('+7 days')) . ' 23:59:59');
+    $is_due_week = $due_ts && $due_ts >= $today_start && $due_ts <= $week_end;
+
     if ($status_filter === 'all') {
         $filtered[] = $item;
     } elseif ($status_filter === 'due_today' && $item['status_key'] === 'due-today') {
         $filtered[] = $item;
     } elseif ($status_filter === 'due_soon' && $item['status_key'] === 'due-soon') {
+        $filtered[] = $item;
+    } elseif ($status_filter === 'due_week' && $is_due_week) {
         $filtered[] = $item;
     } elseif ($status_filter === 'overdue' && $item['status_key'] === 'overdue') {
         $filtered[] = $item;
@@ -433,35 +434,26 @@ foreach ($items as $item) {
             </div>
         </div>
         <?php endif; ?>
-
-        <section class="vet-stats" style="margin-bottom: 16px;">
-            <a href="reminders.php?status=all" class="vet-stat-card vet-stat-link" aria-label="Show all reminders">
-                <div class="vet-stat-icon"><i class="bi bi-list-task"></i></div>
-                <div class="vet-stat-number"><?= (int)$counts['all'] ?></div>
-                <div class="vet-stat-label">All reminders</div>
-            </a>
-            <a href="reminders.php?status=due_today" class="vet-stat-card vet-stat-link" aria-label="Show due today reminders">
-                <div class="vet-stat-icon"><i class="bi bi-calendar-event"></i></div>
-                <div class="vet-stat-number"><?= (int)$counts['due_today'] ?></div>
-                <div class="vet-stat-label">Due today</div>
-            </a>
-            <a href="reminders.php?status=due_soon" class="vet-stat-card vet-stat-link" aria-label="Show due soon reminders">
-                <div class="vet-stat-icon"><i class="bi bi-alarm"></i></div>
-                <div class="vet-stat-number"><?= (int)$counts['due_soon'] ?></div>
-                <div class="vet-stat-label">Due soon</div>
-            </a>
-            <a href="reminders.php?status=overdue" class="vet-stat-card vet-stat-link" aria-label="Show overdue reminders">
-                <div class="vet-stat-icon"><i class="bi bi-exclamation-triangle"></i></div>
-                <div class="vet-stat-number"><?= (int)$counts['overdue'] ?></div>
-                <div class="vet-stat-label">Overdue</div>
-            </a>
-        </section>
-
         <section class="vet-panel">
             <div class="vet-panel-header">
-                <h3 class="vet-panel-title">Auto reminder queue (status-based)</h3>
-                <span class="text-muted small">Manual typing removed. Reminders are sent based on medical records only.</span>
+                <h3 class="vet-panel-title">Reminder list</h3>
+                <span class="text-muted small">
+                    <?php if ($type_filter === 'vaccine_deworming'): ?>
+                        Showing vaccination/deworming reminders only.
+                    <?php elseif ($type_filter === 'treatment'): ?>
+                        Showing treatment follow-up reminders only.
+                    <?php else: ?>
+                        Manual typing removed. Reminders are sent based on medical records only.
+                    <?php endif; ?>
+                </span>
             </div>
+
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <a class="btn btn-sm <?= $type_filter === 'all' ? 'btn-dark' : 'btn-outline-secondary' ?>" href="reminders.php?<?= htmlspecialchars(vet_reminder_query(['type' => 'all'])) ?>">All types</a>
+                <a class="btn btn-sm <?= $type_filter === 'vaccine_deworming' ? 'btn-dark' : 'btn-outline-secondary' ?>" href="reminders.php?<?= htmlspecialchars(vet_reminder_query(['type' => 'vaccine_deworming'])) ?>">Vaccination / Deworming</a>
+                <a class="btn btn-sm <?= $type_filter === 'treatment' ? 'btn-dark' : 'btn-outline-secondary' ?>" href="reminders.php?<?= htmlspecialchars(vet_reminder_query(['type' => 'treatment'])) ?>">Treatment follow-ups</a>
+            </div>
+
             <div class="table-responsive vet-reminder-scroll">
                 <table class="vet-panel-table">
                     <thead>
@@ -478,7 +470,7 @@ foreach ($items as $item) {
                     <tbody>
                         <?php if (empty($filtered)): ?>
                         <tr>
-                            <td colspan="7" class="text-center py-4 text-muted">No reminders in this status filter</td>
+                            <td colspan="7" class="text-center py-4 text-muted">No reminders found</td>
                         </tr>
                         <?php else: ?>
                             <?php foreach ($filtered as $row): ?>

@@ -18,6 +18,25 @@ if (!function_exists('petcura_reminder_column_exists')) {
     }
 }
 
+if (!function_exists('petcura_ensure_reminder_email_columns')) {
+    function petcura_ensure_reminder_email_columns($conn)
+    {
+        $columns = [
+            'reminder_3_days' => "ALTER TABLE reminders ADD COLUMN reminder_3_days DATETIME DEFAULT NULL AFTER reminder_7_days",
+            'event_3_days_sent' => "ALTER TABLE reminders ADD COLUMN event_3_days_sent TINYINT(1) DEFAULT 0 AFTER event_7_days_sent"
+        ];
+
+        foreach ($columns as $column => $alter_sql) {
+            if (!petcura_reminder_column_exists($conn, $column)) {
+                mysqli_query($conn, $alter_sql);
+            }
+        }
+
+        return petcura_reminder_column_exists($conn, 'reminder_3_days')
+            && petcura_reminder_column_exists($conn, 'event_3_days_sent');
+    }
+}
+
 if (!function_exists('petcura_reminders_advanced_supported')) {
     function petcura_reminders_advanced_supported($conn)
     {
@@ -31,10 +50,12 @@ if (!function_exists('petcura_reminders_advanced_supported')) {
             'record_id',
             'next_due_date',
             'reminder_7_days',
+            'reminder_3_days',
             'reminder_1_day',
             'reminder_due_date',
             'reminder_1_day_after',
             'event_7_days_sent',
+            'event_3_days_sent',
             'event_1_day_sent',
             'event_due_date_sent',
             'event_1_day_after_sent'
@@ -212,6 +233,8 @@ if (!function_exists('petcura_upsert_auto_reminder')) {
         $default_message = ucfirst($legacy_type) . ' reminder for your pet. Due date: ' . date('M d, Y', strtotime($due_date_only));
         $safe_message = $message !== null && trim((string)$message) !== '' ? trim((string)$message) : $default_message;
 
+        petcura_ensure_reminder_email_columns($conn);
+
         if (petcura_reminders_advanced_supported($conn)) {
             $delete_stmt = mysqli_prepare(
                 $conn,
@@ -227,6 +250,7 @@ if (!function_exists('petcura_upsert_auto_reminder')) {
 
             $due_dt = petcura_to_datetime($due_date_only, '06:00:00');
             $r7 = petcura_to_datetime(date('Y-m-d', strtotime($due_date_only . ' -7 days')), '06:00:00');
+            $r3 = petcura_to_datetime(date('Y-m-d', strtotime($due_date_only . ' -3 days')), '06:00:00');
             $r1 = petcura_to_datetime(date('Y-m-d', strtotime($due_date_only . ' -1 day')), '06:00:00');
             $r_after = petcura_to_datetime(date('Y-m-d', strtotime($due_date_only . ' +1 day')), '06:00:00');
 
@@ -235,9 +259,9 @@ if (!function_exists('petcura_upsert_auto_reminder')) {
                 "INSERT INTO reminders (
                     pet_id, owner_id, vet_id, reminder_type, reminder_date, channel, status, message, sent_at, created_at,
                     record_type, record_id, next_due_date,
-                    reminder_7_days, reminder_1_day, reminder_due_date, reminder_1_day_after,
-                    event_7_days_sent, event_1_day_sent, event_due_date_sent, event_1_day_after_sent
-                ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, NULL, NOW(), ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0)"
+                    reminder_7_days, reminder_3_days, reminder_1_day, reminder_due_date, reminder_1_day_after,
+                    event_7_days_sent, event_3_days_sent, event_1_day_sent, event_due_date_sent, event_1_day_after_sent
+                ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, NULL, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0)"
             );
 
             if (!$insert_stmt) {
@@ -246,7 +270,7 @@ if (!function_exists('petcura_upsert_auto_reminder')) {
 
             mysqli_stmt_bind_param(
                 $insert_stmt,
-                'iiisssssisssss',
+                'iiisssssissssss',
                 $pet_id,
                 $owner_id,
                 $vet_id,
@@ -258,6 +282,7 @@ if (!function_exists('petcura_upsert_auto_reminder')) {
                 $record_id,
                 $due_dt,
                 $r7,
+                $r3,
                 $r1,
                 $due_dt,
                 $r_after
