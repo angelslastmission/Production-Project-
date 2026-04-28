@@ -3,6 +3,7 @@ session_start();
 include '../config.php';
 include 'includes/auth.php';
 include 'includes/reminder_helper.php';
+date_default_timezone_set('Asia/Kathmandu');
 
 $active_page = 'dashboard';
 
@@ -192,9 +193,9 @@ if ($reminders_panel_stmt) {
 }
 
 $hour = (int)date('H');
-if ($hour < 12) {
+if ($hour >= 5 && $hour < 12) {
     $greeting = 'Good Morning';
-} elseif ($hour < 17) {
+} elseif ($hour >= 12 && $hour < 17) {
     $greeting = 'Good Afternoon';
 } else {
     $greeting = 'Good Evening';
@@ -241,7 +242,7 @@ if ($hour < 12) {
                 <span><?= (int)$overdue_count ?> vaccination/deworming<?= $overdue_count > 1 ? 's are' : ' is' ?> overdue - send reminders to owners now.</span>
             </div>
             <div>
-                <a href="reminders.php?status=overdue" class="vet-alert-btn text-decoration-none">VIEW REMINDERS</a>
+                <a href="reminders.php?status=overdue&type=vaccine_deworming" class="vet-alert-btn text-decoration-none">VIEW REMINDERS</a>
             </div>
         </section>
         <?php endif; ?>
@@ -253,13 +254,13 @@ if ($hour < 12) {
                 <div class="vet-stat-label">Total patients</div>
             </a>
 
-            <a href="reminders.php?status=due_soon" class="vet-stat-card vet-stat-link">
+            <a href="reminders.php?status=due_week&type=vaccine_deworming" class="vet-stat-card vet-stat-link">
                 <div class="vet-stat-icon"><i class="bi bi-shield-check"></i></div>
                 <div class="vet-stat-number"><?= (int)$due_this_week ?></div>
                 <div class="vet-stat-label">Vaccination / deworming due this week</div>
             </a>
 
-            <a href="reminders.php?status=overdue" class="vet-stat-card vet-stat-link">
+            <a href="reminders.php?status=overdue&type=vaccine_deworming" class="vet-stat-card vet-stat-link">
                 <div class="vet-stat-icon"><i class="bi bi-shield-exclamation"></i></div>
                 <div class="vet-stat-number"><?= (int)$overdue_count ?></div>
                 <div class="vet-stat-label">Vaccination / deworming overdue</div>
