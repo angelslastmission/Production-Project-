@@ -282,7 +282,8 @@ body {
 .owner-pet-avatar {
     width: 48px;
     height: 48px;
-    background: var(--owner-accent-light);
+    background: #ccfbf1;
+    border: 1px solid #99f6e4;
     border-radius: 8px;
     display: flex;
     align-items: center;

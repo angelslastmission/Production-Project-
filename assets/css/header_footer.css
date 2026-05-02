@@ -1,130 +1,198 @@
 /* ═══════════════════════════════════════════════
-   PetCare HMS — header_footer.css
-   Contains: Navbar + Footer ONLY
-   NOTE: Styles are exactly the same as original
+   PetCura HMS — header_footer.css
+   Navbar + Footer  |  Font: Outfit + Plus Jakarta Sans
 ═══════════════════════════════════════════════ */
 
-/* ═══════════════════════════════════
-   NAVBAR
-═══════════════════════════════════ */
+/* ═══ NAVBAR ═══ */
 .petcare-navbar {
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--slate-200);
-  padding-top: 14px;
-  padding-bottom: 14px;
-  transition: box-shadow 0.3s ease;
+  background: rgba(255,255,255,0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  padding-top: 10px;
+  padding-bottom: 10px;
+  transition: background 0.35s ease, box-shadow 0.35s ease, border-color 0.35s ease;
 }
 
-.petcare-navbar.nav-scrolled {
-  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.08);
+/* Home page — starts transparent over dark hero */
+.petcare-navbar.nav-hero {
+  background: transparent;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
-.nav-logo-icon { font-size: 22px; }
+/* Home page — after scrolling past hero, becomes white */
+.petcare-navbar.nav-hero.nav-scrolled {
+  background: rgba(10,15,30,0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 0 2px 24px rgba(0,0,0,0.3);
+}
+
+/* Non-home pages — always solid white */
+.petcare-navbar.nav-page {
+  background: rgba(255,255,255,0.98);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+}
+
+.nav-logo-icon { font-size: 20px; }
 
 .nav-logo-text {
-  font-family: var(--font-head);
-  font-weight: 700;
-  font-size: 19px;
-  color: var(--slate-900);
-  letter-spacing: -0.01em;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+  font-size: 17px;
+  color: #0f172a;
+  letter-spacing: -0.03em;
 }
 
-.nav-logo-accent { color: var(--teal); }
+.nav-logo-accent { color: #0d9488; }
 
 .petcare-navbar .nav-link {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--slate-600);
-  padding: 8px 14px !important;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #64748b;
+  padding: 7px 13px !important;
   border-radius: 8px;
   transition: color 0.2s, background 0.2s;
+  letter-spacing: 0.01em;
 }
 
 .petcare-navbar .nav-link:hover,
 .petcare-navbar .nav-link.active {
-  color: var(--teal);
-  background: var(--teal-50);
+  color: #0d9488;
+  background: #f0fdfa;
+}
+
+/* On dark hero — links are white */
+.petcare-navbar.nav-hero .nav-link,
+.petcare-navbar.nav-hero .nav-logo-text {
+  color: rgba(255,255,255,0.85);
+}
+
+.petcare-navbar.nav-hero .nav-link:hover,
+.petcare-navbar.nav-hero .nav-link.active {
+  color: #fff;
+  background: rgba(255,255,255,0.1);
+}
+
+.petcare-navbar.nav-hero .nav-logo-accent {
+  color: #14b8a6;
+}
+
+.petcare-navbar.nav-hero .btn-nav-signin {
+  border-color: rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.85);
+}
+
+.petcare-navbar.nav-hero .btn-nav-signin:hover {
+  border-color: rgba(255,255,255,0.7);
+  color: #fff;
+  background: rgba(255,255,255,0.08);
+}
+
+/* After scroll on hero — links become white again (dark bg) */
+.petcare-navbar.nav-hero.nav-scrolled .nav-link {
+  color: rgba(255,255,255,0.75);
+}
+
+.petcare-navbar.nav-hero.nav-scrolled .nav-link:hover,
+.petcare-navbar.nav-hero.nav-scrolled .nav-link.active {
+  color: #14b8a6;
+  background: rgba(255,255,255,0.08);
 }
 
 .btn-nav-signin {
-  padding: 8px 20px;
-  border: 1.5px solid var(--slate-200);
-  border-radius: 8px;
+  padding: 7px 18px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 9px;
   background: transparent;
-  color: var(--slate-700);
-  font-size: 14px;
+  color: #475569;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 13px;
   font-weight: 600;
-  transition: border-color 0.2s, color 0.2s;
+  transition: all 0.2s;
 }
 
 .btn-nav-signin:hover {
-  border-color: var(--teal);
-  color: var(--teal);
+  border-color: #0d9488;
+  color: #0d9488;
+  background: #f0fdfa;
 }
 
 .btn-nav-register {
-  padding: 8px 22px;
-  border-radius: 8px;
-  background: var(--teal);
-  color: var(--white) !important;
-  font-size: 14px;
-  font-weight: 600;
+  padding: 7px 20px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #0d9488, #0f766e);
+  color: #fff !important;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
   border: none;
-  box-shadow: 0 3px 10px rgba(13, 148, 136, 0.3);
-  transition: background 0.2s, box-shadow 0.2s, transform 0.2s;
+  box-shadow: 0 3px 12px rgba(13,148,136,0.3);
+  transition: all 0.2s;
 }
 
 .btn-nav-register:hover {
-  background: var(--teal-dark);
-  box-shadow: 0 5px 16px rgba(13, 148, 136, 0.4);
+  background: linear-gradient(135deg, #0f766e, #134e4a);
+  box-shadow: 0 5px 18px rgba(13,148,136,0.4);
   transform: translateY(-1px);
 }
 
-/* ═══════════════════════════════════
-   FOOTER
-═══════════════════════════════════ */
+/* ═══ FOOTER — compact, elegant ═══ */
 .petcare-footer {
-  background: var(--slate-900);
-  color: rgba(255, 255, 255, 0.52);
-  padding: 70px 0 30px;
+  background: #0a0f1e;
+  color: rgba(255,255,255,0.4);
+  padding: 36px 0 18px;
+  border-top: 1px solid rgba(255,255,255,0.04);
 }
 
 .footer-top {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding-bottom: 24px;
+  margin-bottom: 18px;
 }
 
 .footer-brand-text {
-  font-family: var(--font-head);
-  font-weight: 700;
-  font-size: 17px;
-  color: var(--white);
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+  font-size: 15px;
+  color: #fff;
+  letter-spacing: -0.02em;
 }
 
 .footer-desc {
-  font-size: 13.5px;
-  line-height: 1.75;
-  max-width: 270px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 12px;
+  line-height: 1.7;
+  max-width: 220px;
+  margin-top: 8px;
+  color: rgba(255,255,255,0.35);
 }
 
 .footer-tech-tag {
-  padding: 4px 12px;
+  padding: 2px 9px;
   border-radius: 99px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  font-size: 11.5px;
-  color: rgba(255, 255, 255, 0.42);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  font-size: 10px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  color: rgba(255,255,255,0.3);
 }
 
 .footer-heading {
-  font-family: var(--font-head);
-  font-size: 11.5px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 10px;
   font-weight: 700;
-  color: var(--white);
+  color: rgba(255,255,255,0.6);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin-bottom: 16px;
+  letter-spacing: 0.12em;
+  margin-bottom: 10px;
 }
 
 .footer-links {
@@ -133,17 +201,32 @@
   margin: 0;
 }
 
-.footer-links li { margin-bottom: 10px; }
+.footer-links li { margin-bottom: 6px; }
 
 .footer-links a {
-  font-size: 13.5px;
-  color: rgba(255, 255, 255, 0.42);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 12px;
+  color: rgba(255,255,255,0.32);
   transition: color 0.2s;
 }
 
-.footer-links a:hover { color: var(--teal-light); }
+.footer-links a:hover { color: #14b8a6; }
 
 .footer-bottom {
-  padding-top: 26px;
-  font-size: 12.5px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 11px;
+  color: rgba(255,255,255,0.22);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  text-align: center;
+}
+
+@media (min-width: 768px) {
+  .footer-bottom {
+    flex-direction: row;
+    justify-content: space-between;
+    text-align: left;
+  }
 }

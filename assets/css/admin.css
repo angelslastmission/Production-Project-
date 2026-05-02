@@ -1,12 +1,12 @@
 /* ═══════════════════════════════════
-   ADMIN PANEL — PetCare HMS
+   ADMIN PANEL — PetCura
 ═══════════════════════════════════ */
 
 * { box-sizing: border-box; }
 
 body {
-    font-family: 'DM Sans', sans-serif;
-    background: #f8fafc;
+    font-family: 'Plus Jakarta Sans', 'DM Sans', sans-serif;
+    background: linear-gradient(135deg, #f8fafc 0%, #f0fdfa 100%);
     margin: 0;
 }
 
@@ -26,8 +26,8 @@ body {
 /* ── Sidebar ── */
 .admin-sidebar {
     width: 240px;
-    background: #ffffff;
-    border-right: 1px solid #e5e7eb;
+    background: rgba(255,255,255,0.96);
+    border-right: 1px solid rgba(13,148,136,0.12);
     position: fixed;
     top: 0;
     left: 0;
@@ -785,3 +785,19 @@ body {
     }
 }
 
+
+
+/* Dashboard polish */
+.admin-topbar,
+.stat-card,
+.admin-card,
+.admin-panel {
+    box-shadow: 0 12px 28px rgba(15,23,42,0.05);
+}
+
+.admin-topbar {
+    background: #ffffff;
+    border: 1px solid rgba(13,148,136,0.12);
+    border-radius: 18px;
+    padding: 20px 22px;
+}
