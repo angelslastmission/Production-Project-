@@ -42,9 +42,6 @@
             <span>Manage pets</span>
         </a>
 
-
-        <p class="sidebar-section-label">SYSTEM</p>
-
         <a href="reminder_logs.php"
            class="sidebar-link <?= $active_page === 'reminder_logs' ? 'active' : '' ?>">
             <i class="bi bi-bell-fill"></i>
@@ -62,6 +59,18 @@
             <i class="bi bi-envelope-check-fill"></i>
             <span>Email logs</span>
         </a>
+        <a href="send_sms_reminders.php"
+   class="sidebar-link <?= $active_page === 'send_sms_reminders' ? 'active' : '' ?>">
+    <i class="bi bi-phone-fill"></i>
+    <span>Send SMS reminders</span>
+</a>
+
+<a href="sms_reminder_logs.php"
+   class="sidebar-link <?= $active_page === 'sms_reminder_logs' ? 'active' : '' ?>">
+    <i class="bi bi-chat-dots-fill"></i>
+    <span>SMS logs</span>
+</a>
+        
 
         <a href="settings.php"
            class="sidebar-link <?= $active_page === 'settings' ? 'active' : '' ?>">

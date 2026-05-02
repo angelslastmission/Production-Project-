@@ -52,7 +52,13 @@ function calculate_age($dob) {
 // ── Fetch owner's pets ───────────────
 $pets = [];
 $pets_stmt = mysqli_prepare($conn,
-    "SELECT id, name, species, breed, dob, status FROM pets WHERE owner_id = ? ORDER BY name ASC");
+    "SELECT p.id, p.name, p.species, p.breed, p.dob, p.status,
+            CONCAT(COALESCE(v.first_name, ''), ' ', COALESCE(v.last_name, '')) AS vet_name,
+            v.clinic_name
+     FROM pets p
+     LEFT JOIN users v ON v.id = p.vet_id AND v.role = 'vet'
+     WHERE p.owner_id = ?
+     ORDER BY p.name ASC");
 if ($pets_stmt) {
     mysqli_stmt_bind_param($pets_stmt, 'i', $owner_id);
     mysqli_stmt_execute($pets_stmt);
@@ -82,55 +88,173 @@ foreach ($pets as $pet_item) {
     }
 }
 
-// ── Fetch vaccination alerts ──────────
+// ── Fetch reminder alerts (vaccination, deworming, treatment follow-up) ──────────
 $overdue_alerts = [];
 $upcoming_alerts = [];
 
-// Get LATEST vaccination record for each vaccine per pet
-// Only show overdue if the latest record's date_given is BEFORE the due date (not re-vaccinated yet)
-$overdue_stmt = mysqli_prepare($conn,
+function owner_alert_type_label($type) {
+    if ($type === 'vaccination') return 'vaccination';
+    if ($type === 'deworming') return 'deworming';
+    if ($type === 'treatment') return 'treatment follow-up';
+    return 'reminder';
+}
+
+function owner_add_alert(&$bucket, $row, $type, $title_key, $date_key) {
+    $bucket[] = [
+        'type' => $type,
+        'pet_id' => (int)($row['pet_id'] ?? 0),
+        'pet_name' => (string)($row['pet_name'] ?? 'Pet'),
+        'title' => (string)($row[$title_key] ?? ''),
+        'due_date' => (string)($row[$date_key] ?? '')
+    ];
+}
+
+// Latest vaccination record per vaccine
+$overdue_vax_stmt = mysqli_prepare($conn,
     "SELECT p.id AS pet_id, p.name AS pet_name, v.vaccine_name, v.next_due_date, v.date_given,
             CASE WHEN v.date_given >= v.next_due_date THEN 1 ELSE 0 END AS is_revaccinated
      FROM vaccinations v
      JOIN pets p ON p.id = v.pet_id
      WHERE p.owner_id = ? AND v.next_due_date IS NOT NULL AND v.next_due_date < CURDATE()
-       AND v.id = (SELECT id FROM vaccinations v2 
-                   WHERE v2.pet_id = v.pet_id AND v2.vaccine_name = v.vaccine_name 
+       AND v.id = (SELECT id FROM vaccinations v2
+                   WHERE v2.pet_id = v.pet_id AND v2.vaccine_name = v.vaccine_name
                    ORDER BY v2.date_given DESC LIMIT 1)
      ORDER BY v.next_due_date ASC");
-if ($overdue_stmt) {
-    mysqli_stmt_bind_param($overdue_stmt, 'i', $owner_id);
-    mysqli_stmt_execute($overdue_stmt);
-    $overdue_result = mysqli_stmt_get_result($overdue_stmt);
+if ($overdue_vax_stmt) {
+    mysqli_stmt_bind_param($overdue_vax_stmt, 'i', $owner_id);
+    mysqli_stmt_execute($overdue_vax_stmt);
+    $overdue_result = mysqli_stmt_get_result($overdue_vax_stmt);
 
     while ($row = $overdue_result ? mysqli_fetch_assoc($overdue_result) : null) {
-        if (!$row['is_revaccinated']) {
-            $overdue_alerts[] = $row;
+        if (empty($row['is_revaccinated'])) {
+            owner_add_alert($overdue_alerts, $row, 'vaccination', 'vaccine_name', 'next_due_date');
         }
     }
 
-    mysqli_stmt_close($overdue_stmt);
+    mysqli_stmt_close($overdue_vax_stmt);
+}
+
+$overdue_deworm_stmt = mysqli_prepare($conn,
+    "SELECT p.id AS pet_id, p.name AS pet_name, d.product_name, d.next_due_date, d.date_given,
+            CASE WHEN d.date_given >= d.next_due_date THEN 1 ELSE 0 END AS is_redone
+     FROM dewormings d
+     JOIN pets p ON p.id = d.pet_id
+     WHERE p.owner_id = ? AND d.next_due_date IS NOT NULL AND d.next_due_date < CURDATE()
+       AND d.id = (SELECT id FROM dewormings d2
+                   WHERE d2.pet_id = d.pet_id AND d2.product_name = d.product_name
+                   ORDER BY d2.date_given DESC LIMIT 1)
+     ORDER BY d.next_due_date ASC");
+if ($overdue_deworm_stmt) {
+    mysqli_stmt_bind_param($overdue_deworm_stmt, 'i', $owner_id);
+    mysqli_stmt_execute($overdue_deworm_stmt);
+    $overdue_result = mysqli_stmt_get_result($overdue_deworm_stmt);
+
+    while ($row = $overdue_result ? mysqli_fetch_assoc($overdue_result) : null) {
+        if (empty($row['is_redone'])) {
+            owner_add_alert($overdue_alerts, $row, 'deworming', 'product_name', 'next_due_date');
+        }
+    }
+
+    mysqli_stmt_close($overdue_deworm_stmt);
+}
+
+$overdue_treatment_stmt = mysqli_prepare($conn,
+    "SELECT p.id AS pet_id, p.name AS pet_name,
+            COALESCE(NULLIF(TRIM(t.diagnosis), ''), 'Follow-up') AS diagnosis,
+            t.followup_date
+     FROM treatments t
+     JOIN pets p ON p.id = t.pet_id
+     WHERE p.owner_id = ? AND t.followup_status = 'active'
+       AND t.followup_date IS NOT NULL AND t.followup_date < CURDATE()
+     ORDER BY t.followup_date ASC");
+if ($overdue_treatment_stmt) {
+    mysqli_stmt_bind_param($overdue_treatment_stmt, 'i', $owner_id);
+    mysqli_stmt_execute($overdue_treatment_stmt);
+    $overdue_result = mysqli_stmt_get_result($overdue_treatment_stmt);
+
+    while ($row = $overdue_result ? mysqli_fetch_assoc($overdue_result) : null) {
+        owner_add_alert($overdue_alerts, $row, 'treatment', 'diagnosis', 'followup_date');
+    }
+
+    mysqli_stmt_close($overdue_treatment_stmt);
 }
 
 if (empty($overdue_alerts)) {
-    $upcoming_stmt = mysqli_prepare($conn,
+    $upcoming_vax_stmt = mysqli_prepare($conn,
         "SELECT p.id AS pet_id, p.name AS pet_name, v.vaccine_name, v.next_due_date
          FROM vaccinations v
          JOIN pets p ON p.id = v.pet_id
          WHERE p.owner_id = ? AND v.next_due_date IS NOT NULL
            AND v.next_due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+           AND v.id = (SELECT id FROM vaccinations v2
+                       WHERE v2.pet_id = v.pet_id AND v2.vaccine_name = v.vaccine_name
+                       ORDER BY v2.date_given DESC LIMIT 1)
          ORDER BY v.next_due_date ASC");
-    if ($upcoming_stmt) {
-        mysqli_stmt_bind_param($upcoming_stmt, 'i', $owner_id);
-        mysqli_stmt_execute($upcoming_stmt);
-        $upcoming_result = mysqli_stmt_get_result($upcoming_stmt);
+    if ($upcoming_vax_stmt) {
+        mysqli_stmt_bind_param($upcoming_vax_stmt, 'i', $owner_id);
+        mysqli_stmt_execute($upcoming_vax_stmt);
+        $upcoming_result = mysqli_stmt_get_result($upcoming_vax_stmt);
 
         while ($row = $upcoming_result ? mysqli_fetch_assoc($upcoming_result) : null) {
-            $upcoming_alerts[] = $row;
+            owner_add_alert($upcoming_alerts, $row, 'vaccination', 'vaccine_name', 'next_due_date');
         }
 
-        mysqli_stmt_close($upcoming_stmt);
+        mysqli_stmt_close($upcoming_vax_stmt);
     }
+
+    $upcoming_deworm_stmt = mysqli_prepare($conn,
+        "SELECT p.id AS pet_id, p.name AS pet_name, d.product_name, d.next_due_date
+         FROM dewormings d
+         JOIN pets p ON p.id = d.pet_id
+         WHERE p.owner_id = ? AND d.next_due_date IS NOT NULL
+           AND d.next_due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+           AND d.id = (SELECT id FROM dewormings d2
+                       WHERE d2.pet_id = d.pet_id AND d2.product_name = d.product_name
+                       ORDER BY d2.date_given DESC LIMIT 1)
+         ORDER BY d.next_due_date ASC");
+    if ($upcoming_deworm_stmt) {
+        mysqli_stmt_bind_param($upcoming_deworm_stmt, 'i', $owner_id);
+        mysqli_stmt_execute($upcoming_deworm_stmt);
+        $upcoming_result = mysqli_stmt_get_result($upcoming_deworm_stmt);
+
+        while ($row = $upcoming_result ? mysqli_fetch_assoc($upcoming_result) : null) {
+            owner_add_alert($upcoming_alerts, $row, 'deworming', 'product_name', 'next_due_date');
+        }
+
+        mysqli_stmt_close($upcoming_deworm_stmt);
+    }
+
+    $upcoming_treatment_stmt = mysqli_prepare($conn,
+        "SELECT p.id AS pet_id, p.name AS pet_name,
+                COALESCE(NULLIF(TRIM(t.diagnosis), ''), 'Follow-up') AS diagnosis,
+                t.followup_date
+         FROM treatments t
+         JOIN pets p ON p.id = t.pet_id
+         WHERE p.owner_id = ? AND t.followup_status = 'active'
+           AND t.followup_date IS NOT NULL
+           AND t.followup_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+         ORDER BY t.followup_date ASC");
+    if ($upcoming_treatment_stmt) {
+        mysqli_stmt_bind_param($upcoming_treatment_stmt, 'i', $owner_id);
+        mysqli_stmt_execute($upcoming_treatment_stmt);
+        $upcoming_result = mysqli_stmt_get_result($upcoming_treatment_stmt);
+
+        while ($row = $upcoming_result ? mysqli_fetch_assoc($upcoming_result) : null) {
+            owner_add_alert($upcoming_alerts, $row, 'treatment', 'diagnosis', 'followup_date');
+        }
+
+        mysqli_stmt_close($upcoming_treatment_stmt);
+    }
+}
+
+if (!empty($overdue_alerts)) {
+    usort($overdue_alerts, function ($a, $b) {
+        return strcmp($a['due_date'], $b['due_date']);
+    });
+} elseif (!empty($upcoming_alerts)) {
+    usort($upcoming_alerts, function ($a, $b) {
+        return strcmp($a['due_date'], $b['due_date']);
+    });
 }
 
 // ── Fetch recent notifications/reminders (limit 3) ───
@@ -178,15 +302,21 @@ if ($notif_stmt) {
             <?php $alert_count = 0; ?>
             <?php foreach ($overdue_alerts as $overdue_alert): ?>
             <?php if ($alert_count >= 3) break; ?>
-            <section class="owner-alert" style="background:#fee2e2;border-left:4px solid #dc2626;">
+            <?php
+                $type_label = owner_alert_type_label($overdue_alert['type']);
+                $detail = trim((string)($overdue_alert['title'] ?? ''));
+                $detail_text = $detail !== '' ? ' (' . htmlspecialchars($detail) . ')' : '';
+                $type_colors = [
+                    'vaccination' => ['bg' => '#fee2e2', 'border' => '#dc2626', 'icon' => '#dc2626'],
+                    'deworming' => ['bg' => '#dbeafe', 'border' => '#2563eb', 'icon' => '#2563eb'],
+                    'treatment' => ['bg' => '#dcfce7', 'border' => '#16a34a', 'icon' => '#16a34a']
+                ];
+                $palette = $type_colors[$overdue_alert['type']] ?? ['bg' => '#fee2e2', 'border' => '#dc2626', 'icon' => '#dc2626'];
+            ?>
+            <section class="owner-alert" style="background:<?= htmlspecialchars($palette['bg']) ?>;border-left:4px solid <?= htmlspecialchars($palette['border']) ?>;">
                 <div class="owner-alert-text">
-                    <i class="bi bi-exclamation-triangle" style="color:#dc2626;"></i>
-                    <span style="line-height:1.4;"><?= htmlspecialchars($overdue_alert['pet_name']) ?>'s <?= htmlspecialchars($overdue_alert['vaccine_name']) ?> vaccination is overdue since <?= htmlspecialchars(date('d M Y', strtotime($overdue_alert['next_due_date']))) ?>. Please schedule an appointment immediately.</span>
-                </div>
-                <div>
-                    <a href="schedule.php?pet_id=<?= (int)$overdue_alert['pet_id'] ?>&type=overdue" class="owner-alert-btn" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">
-                        Schedule Now
-                    </a>
+                    <i class="bi bi-exclamation-triangle" style="color:<?= htmlspecialchars($palette['icon']) ?>;"></i>
+                    <span style="line-height:1.4;"><?= htmlspecialchars($overdue_alert['pet_name']) ?>'s <?= htmlspecialchars($type_label) ?><?= $detail_text ?> is overdue since <?= htmlspecialchars(date('d M Y', strtotime($overdue_alert['due_date']))) ?>. Please schedule an appointment immediately.</span>
                 </div>
             </section>
             <?php $alert_count++; ?>
@@ -200,10 +330,21 @@ if ($notif_stmt) {
             <?php $upcoming_count = 0; ?>
             <?php foreach ($upcoming_alerts as $upcoming_alert): ?>
             <?php if ($upcoming_count >= 3) break; ?>
-            <section class="owner-alert" style="background:#fef3c7;border-left:4px solid #f59e0b;">
+            <?php
+                $type_label = owner_alert_type_label($upcoming_alert['type']);
+                $detail = trim((string)($upcoming_alert['title'] ?? ''));
+                $detail_text = $detail !== '' ? ' (' . htmlspecialchars($detail) . ')' : '';
+                $type_colors = [
+                    'vaccination' => ['bg' => '#fee2e2', 'border' => '#dc2626', 'icon' => '#dc2626'],
+                    'deworming' => ['bg' => '#dbeafe', 'border' => '#2563eb', 'icon' => '#2563eb'],
+                    'treatment' => ['bg' => '#dcfce7', 'border' => '#16a34a', 'icon' => '#16a34a']
+                ];
+                $palette = $type_colors[$upcoming_alert['type']] ?? ['bg' => '#fef3c7', 'border' => '#f59e0b', 'icon' => '#f59e0b'];
+            ?>
+            <section class="owner-alert" style="background:<?= htmlspecialchars($palette['bg']) ?>;border-left:4px solid <?= htmlspecialchars($palette['border']) ?>;">
                 <div class="owner-alert-text">
-                    <i class="bi bi-info-circle" style="color:#f59e0b;"></i>
-                    <span style="line-height:1.4;"><?= htmlspecialchars($upcoming_alert['pet_name']) ?>'s <?= htmlspecialchars($upcoming_alert['vaccine_name']) ?> vaccination is coming up on <?= htmlspecialchars(date('d M Y', strtotime($upcoming_alert['next_due_date']))) ?>. Keep an eye on this date.</span>
+                    <i class="bi bi-info-circle" style="color:<?= htmlspecialchars($palette['icon']) ?>;"></i>
+                    <span style="line-height:1.4;"><?= htmlspecialchars($upcoming_alert['pet_name']) ?>'s <?= htmlspecialchars($type_label) ?><?= $detail_text ?> is coming up on <?= htmlspecialchars(date('d M Y', strtotime($upcoming_alert['due_date']))) ?>. Keep an eye on this date.</span>
                 </div>
             </section>
             <?php $upcoming_count++; ?>
@@ -236,10 +377,6 @@ if ($notif_stmt) {
                 <?php else: ?>
                     <?php foreach ($pets as $pet): ?>
                     <?php
-                    // Determine vaccination status
-                    $vax_status = 'not-vaccinated';
-                    $vax_label = 'Not vaccinated';
-                    $vax_class = 'owner-status-overdue';
                     $next_due_text = 'No vaccination scheduled';
                     
                     if ($pet['last_vaccine']) {
@@ -247,14 +384,8 @@ if ($notif_stmt) {
                         $today = new DateTime();
                         
                         if ($today > $next_due) {
-                            $vax_status = 'overdue';
-                            $vax_label = 'OVERDUE';
-                            $vax_class = 'owner-status-overdue';
                             $next_due_text = $pet['last_vaccine']['vaccine_name'] . ' (' . date('M Y', strtotime($pet['last_vaccine']['next_due_date'])) . ')';
                         } else {
-                            $vax_status = 'up-to-date';
-                            $vax_label = 'UP TO DATE';
-                            $vax_class = 'owner-status-updated';
                             $next_due_text = $pet['last_vaccine']['vaccine_name'] . ' (' . date('M Y', strtotime($pet['last_vaccine']['next_due_date'])) . ')';
                         }
                     }
@@ -267,9 +398,14 @@ if ($notif_stmt) {
                                 <h5 class="owner-pet-name"><?= htmlspecialchars($pet['name']) ?></h5>
                                 <p class="owner-pet-breed"><?= htmlspecialchars($pet['species']) ?> · <?= htmlspecialchars($age) ?></p>
                             </div>
-                            <span class="owner-pet-status <?= $vax_class ?>"><?= $vax_label ?></span>
                         </div>
                         <div class="owner-pet-info">
+                            <div class="owner-pet-info-row">
+                                <span class="owner-info-label">Vet:</span>
+                                <span class="owner-info-value">
+                                    <?= htmlspecialchars(trim((string)($pet['vet_name'] ?? '')) !== '' ? 'Dr. ' . trim((string)$pet['vet_name']) : 'Not assigned') ?>
+                                </span>
+                            </div>
                             <div class="owner-pet-info-row">
                                 <span class="owner-info-label">Breed:</span>
                                 <span class="owner-info-value"><?= htmlspecialchars($pet['breed'] ?: 'N/A') ?></span>

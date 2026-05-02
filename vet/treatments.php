@@ -162,15 +162,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $vet_id > 0) {
 
 $treatments = [];
 if ($vet_id > 0) {
-    $list_where = "t.vet_id = $vet_id AND t.followup_status = 'active'";
+    $list_where = "t.vet_id = $vet_id";
     if ($view_mode === 'followups') {
-        // Show all active follow-ups, including overdue ones.
-        $list_where .= " AND t.followup_date IS NOT NULL";
+        // Follow-ups page should show only pending/active follow-ups.
+        $list_where .= " AND t.followup_date IS NOT NULL AND t.followup_status = 'active'";
     }
 
     $treatment_query = mysqli_query(
         $conn,
-        "SELECT t.id, t.diagnosis, t.treatment_date, t.followup_date, t.severity,
+        "SELECT t.id, t.diagnosis, t.treatment_date, t.followup_date, t.severity, t.followup_status,
                 p.name AS pet_name,
                 CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,'')) AS owner_name,
                 u.email AS owner_email,
@@ -310,8 +310,11 @@ if ($view_mode === 'followups') {
                         <?php else: ?>
                             <?php foreach ($treatments as $row): ?>
                                 <?php
-                                // Follow-up status based on followup_date vs today
-                                if (empty($row['followup_date'])) {
+                                // In all history view, show completed previous treatments instead of hiding them.
+                                if (($row['followup_status'] ?? 'active') === 'completed') {
+                                    $fu_label = 'Completed';
+                                    $fu_class = 'vet-pill-status';
+                                } elseif (empty($row['followup_date'])) {
                                     $fu_label = 'No follow-up';
                                     $fu_class = 'vet-pill-status';
                                 } else {

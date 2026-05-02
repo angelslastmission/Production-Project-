@@ -134,6 +134,19 @@ if ($pst) {
     while ($row = $pr ? mysqli_fetch_assoc($pr) : null) $pets_for_filter[] = $row;
     mysqli_stmt_close($pst);
 }
+
+  function owner_notif_type_class($title, $message, $type) {
+    $hay = strtolower(trim((string)($title . ' ' . $message)));
+    $base = strtolower(trim((string)$type));
+
+    if (strpos($hay, 'deworm') !== false) return 'type-deworming';
+    if (strpos($hay, 'vaccin') !== false) return 'type-vaccination';
+    if ($base === 'followup' || strpos($hay, 'follow') !== false || strpos($hay, 'treat') !== false) {
+      return 'type-treatment';
+    }
+
+    return 'type-generic';
+  }
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -163,11 +176,25 @@ if ($pst) {
     .notif-item:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.09); color: inherit; }
     /* UNREAD = green highlight */
     .notif-item.unread {
-      background: #f0fdf4;
-      border-left: 4px solid #16a34a;
+      box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.18);
     }
     /* READ = plain white, no color */
     .notif-item.read {
+      box-shadow: none;
+    }
+    .notif-item.type-vaccination {
+      background: #fee2e2;
+      border-left: 4px solid #dc2626;
+    }
+    .notif-item.type-deworming {
+      background: #dbeafe;
+      border-left: 4px solid #2563eb;
+    }
+    .notif-item.type-treatment {
+      background: #dcfce7;
+      border-left: 4px solid #16a34a;
+    }
+    .notif-item.type-generic {
       background: #fff;
       border-left: 1px solid #e5e7eb;
     }
@@ -206,6 +233,20 @@ if ($pst) {
       text-transform: uppercase; letter-spacing: 0.05em;
       padding: 8px 0 6px; border-bottom: 1px solid #f3f4f6; margin-bottom: 10px;
     }
+    .detail-badge {
+      display: inline-block;
+      padding: 3px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+      background: #f3f4f6;
+      color: #6b7280;
+    }
+    .detail-badge.type-vaccination { background: #fee2e2; color: #991b1b; }
+    .detail-badge.type-deworming { background: #dbeafe; color: #1d4ed8; }
+    .detail-badge.type-treatment { background: #dcfce7; color: #166534; }
+    .detail-badge.type-generic { background: #e5e7eb; color: #4b5563; }
   </style>
 </head>
 <body>
@@ -262,13 +303,17 @@ if ($pst) {
     <?php if (!empty($notifications)): ?>
     <div class="section-label">Notifications from your vet</div>
     <?php foreach ($notifications as $n): ?>
-    <?php $unread = !(bool)$n['is_read']; ?>
-    <div class="notif-item <?= $unread ? 'unread' : 'read' ?>" onclick="showDetail(
+    <?php
+      $unread = !(bool)$n['is_read'];
+      $type_class = owner_notif_type_class($n['title'] ?? '', $n['message'] ?? '', $n['type'] ?? '');
+    ?>
+    <div class="notif-item <?= $unread ? 'unread' : 'read' ?> <?= $type_class ?>" onclick="showDetail(
         '<?= htmlspecialchars(addslashes($n['title']), ENT_QUOTES) ?>',
         '<?= htmlspecialchars(addslashes($n['message']), ENT_QUOTES) ?>',
         '<?= htmlspecialchars(addslashes($n['pet_name'] ?? ''), ENT_QUOTES) ?>',
         '<?= date('M d, Y · g:i a', strtotime($n['created_at'])) ?>',
-        '<?= htmlspecialchars(addslashes(ucfirst($n['type'])), ENT_QUOTES) ?>'
+        '<?= htmlspecialchars(addslashes(ucfirst($n['type'])), ENT_QUOTES) ?>',
+        '<?= htmlspecialchars(addslashes($type_class), ENT_QUOTES) ?>'
     )">
       <?php if ($unread): ?><div class="unread-dot"></div><?php endif; ?>
       <div class="notif-icon">
@@ -313,7 +358,12 @@ if ($pst) {
       $r_msg   = $r['message'] ?: 'Reminder sent for ' . ($r['pet_name'] ?? 'your pet');
       $r_vet   = trim($r['vet_name'] ?? '') !== '' ? 'Dr. ' . trim($r['vet_name']) : 'Your vet';
     ?>
-    <div class="notif-item">
+    <?php
+      $type_class = $r['reminder_type'] === 'vaccination'
+          ? 'type-vaccination'
+          : ($r['reminder_type'] === 'deworming' ? 'type-deworming' : 'type-treatment');
+    ?>
+    <div class="notif-item <?= $type_class ?>">
       <div class="notif-icon">
         <?php if ($r['reminder_type'] === 'vaccination'): ?><i class="bi bi-shield-check"></i>
         <?php elseif ($r['reminder_type'] === 'deworming'): ?><i class="bi bi-capsule"></i>
@@ -351,7 +401,7 @@ if ($pst) {
 <div id="notifOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;" onclick="closeOverlay(event)">
   <div style="background:#fff;border-radius:14px;padding:28px;max-width:460px;width:90%;position:relative;box-shadow:0 10px 40px rgba(0,0,0,0.2);">
     <button onclick="document.getElementById('notifOverlay').style.display='none'" style="position:absolute;top:14px;right:16px;background:none;border:none;font-size:1.3rem;color:#9ca3af;cursor:pointer;"><i class="bi bi-x-lg"></i></button>
-    <div id="detailBadge" style="display:inline-block;background:#f0fdf4;color:#16a34a;padding:3px 12px;border-radius:20px;font-size:0.75rem;font-weight:700;margin-bottom:12px;"></div>
+    <div id="detailBadge" class="detail-badge"></div>
     <div id="detailTitle" style="font-size:1.1rem;font-weight:800;color:#1f2937;margin-bottom:10px;font-family:'Sora',sans-serif;"></div>
     <div id="detailMsg" style="font-size:0.9rem;color:#4b5563;line-height:1.6;margin-bottom:14px;"></div>
     <div style="font-size:0.83rem;color:#6b7280;display:flex;flex-direction:column;gap:6px;">
@@ -362,12 +412,14 @@ if ($pst) {
 </div>
 
 <script>
-function showDetail(title, msg, pet, time, type) {
+function showDetail(title, msg, pet, time, type, typeClass) {
     document.getElementById('detailTitle').textContent = title;
     document.getElementById('detailMsg').textContent   = msg;
     document.getElementById('detailPet').textContent   = pet || '—';
     document.getElementById('detailTime').textContent  = time;
-    document.getElementById('detailBadge').textContent = type;
+  const badge = document.getElementById('detailBadge');
+  badge.textContent = type;
+  badge.className = 'detail-badge ' + (typeClass || 'type-generic');
     document.getElementById('notifOverlay').style.display = 'flex';
 }
 function closeOverlay(e) {

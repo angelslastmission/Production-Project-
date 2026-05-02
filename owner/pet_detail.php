@@ -44,8 +44,6 @@ $vacc_stmt = mysqli_prepare($conn,
     "SELECT vaccine_name, date_given, next_due_date, dose_number, batch_number, notes
      FROM vaccinations
      WHERE pet_id = ?
-       AND reminder_status = 'active'
-       AND NOT EXISTS (SELECT 1 FROM vaccinations v2 WHERE v2.pet_id = vaccinations.pet_id AND v2.vet_id = vaccinations.vet_id AND v2.vaccine_name = vaccinations.vaccine_name AND v2.id > vaccinations.id)
      ORDER BY date_given DESC");
 if ($vacc_stmt) {
     mysqli_stmt_bind_param($vacc_stmt, 'i', $pet_id);
@@ -62,8 +60,6 @@ $deworm_stmt = mysqli_prepare($conn,
     "SELECT product_name, date_given, next_due_date, dose, notes
      FROM dewormings
      WHERE pet_id = ?
-       AND reminder_status = 'active'
-       AND NOT EXISTS (SELECT 1 FROM dewormings d2 WHERE d2.pet_id = dewormings.pet_id AND d2.vet_id = dewormings.vet_id AND d2.product_name = dewormings.product_name AND d2.id > dewormings.id)
      ORDER BY date_given DESC");
 if ($deworm_stmt) {
     mysqli_stmt_bind_param($deworm_stmt, 'i', $pet_id);
@@ -80,8 +76,6 @@ $treat_stmt = mysqli_prepare($conn,
     "SELECT diagnosis, treatment, treatment_date, followup_date, severity, notes
      FROM treatments
      WHERE pet_id = ?
-       AND followup_status = 'active'
-       AND NOT EXISTS (SELECT 1 FROM treatments t2 WHERE t2.pet_id = treatments.pet_id AND t2.vet_id = treatments.vet_id AND COALESCE(t2.diagnosis, '') = COALESCE(treatments.diagnosis, '') AND t2.id > treatments.id)
      ORDER BY treatment_date DESC");
 if ($treat_stmt) {
     mysqli_stmt_bind_param($treat_stmt, 'i', $pet_id);
@@ -137,49 +131,174 @@ if (!empty($last_visit_candidates)) {
     $last_visit_display = date('M d, Y', max($last_visit_candidates));
 }
 
-function owner_pick_priority_due_ts($records, $date_key)
-{
-    $today_ts = strtotime(date('Y-m-d'));
-    $upcoming = null;
-    $overdue = null;
-
-    foreach ($records as $record) {
-        $raw = (string)($record[$date_key] ?? '');
-        if ($raw === '' || $raw === '0000-00-00') continue;
-        $ts = strtotime(date('Y-m-d', strtotime($raw)));
-        if ($ts === false || $ts <= 0) continue;
-
-        if ($ts >= $today_ts) {
-            if ($upcoming === null || $ts < $upcoming) $upcoming = $ts;
-        } else {
-            if ($overdue === null || $ts > $overdue) $overdue = $ts;
-        }
+$latest_vacc = [];
+foreach ($vaccinations as $vac) {
+    $key = strtolower(trim((string)($vac['vaccine_name'] ?? '')));
+    if ($key === '') {
+        continue;
     }
-
-    return $upcoming ?? $overdue;
+    $ts = strtotime((string)($vac['date_given'] ?? ''));
+    if ($ts === false) {
+        continue;
+    }
+    if (!isset($latest_vacc[$key]) || $ts > $latest_vacc[$key]) {
+        $latest_vacc[$key] = $ts;
+    }
 }
 
-function owner_due_display($due_ts)
-{
-    if ($due_ts === null) return 'None scheduled';
-    $today_ts = strtotime(date('Y-m-d'));
-    $days = (int)(($due_ts - $today_ts) / 86400);
+$latest_deworm = [];
+foreach ($dewormings as $dew) {
+    $key = strtolower(trim((string)($dew['product_name'] ?? '')));
+    if ($key === '') {
+        continue;
+    }
+    $ts = strtotime((string)($dew['date_given'] ?? ''));
+    if ($ts === false) {
+        continue;
+    }
+    if (!isset($latest_deworm[$key]) || $ts > $latest_deworm[$key]) {
+        $latest_deworm[$key] = $ts;
+    }
+}
 
-    if ($days < 0) return '<span style="color:#dc2626;font-weight:700;">Overdue</span> (' . date('M d, Y', $due_ts) . ')';
-    if ($days === 0) return '<span style="color:#d97706;font-weight:700;">Due today</span> (' . date('M d, Y', $due_ts) . ')';
-    if ($days <= 7) return '<span style="color:#d97706;font-weight:700;">Due in ' . $days . ' day' . ($days === 1 ? '' : 's') . '</span> (' . date('M d, Y', $due_ts) . ')';
+$latest_treatment = [];
+foreach ($treatments as $treat) {
+    $key = strtolower(trim((string)($treat['diagnosis'] ?? 'follow-up')));
+    if ($key === '') {
+        $key = 'follow-up';
+    }
+    $ts = strtotime((string)($treat['treatment_date'] ?? ''));
+    if ($ts === false) {
+        continue;
+    }
+    if (!isset($latest_treatment[$key]) || $ts > $latest_treatment[$key]) {
+        $latest_treatment[$key] = $ts;
+    }
+}
+
+// Compute next upcoming vaccination date (earliest future next_due_date)
+$next_vacc_display = 'None scheduled';
+$next_vacc_ts = null;
+foreach ($vaccinations as $v) {
+    $key = strtolower(trim((string)($v['vaccine_name'] ?? '')));
+    $date_ts = strtotime((string)($v['date_given'] ?? ''));
+    if ($key !== '' && isset($latest_vacc[$key]) && $date_ts !== false && $date_ts < $latest_vacc[$key]) {
+        continue;
+    }
+    $nd = (string)($v['next_due_date'] ?? '');
+    if ($nd === '' || $nd === '0000-00-00') continue;
+    $ts = strtotime($nd);
+    if ($ts !== false && $ts > 0 && ($next_vacc_ts === null || $ts < $next_vacc_ts)) {
+        $next_vacc_ts = $ts;
+    }
+}
+if ($next_vacc_ts !== null) {
+    $days_vacc = (int)(($next_vacc_ts - strtotime(date('Y-m-d'))) / 86400);
+    if ($days_vacc < 0) {
+        $next_vacc_display = '<span style="color:#dc2626;font-weight:700;">Overdue</span> (' . date('M d, Y', $next_vacc_ts) . ')';
+    } elseif ($days_vacc === 0) {
+        $next_vacc_display = '<span style="color:#d97706;font-weight:700;">Due today</span>';
+    } elseif ($days_vacc <= 7) {
+        $next_vacc_display = '<span style="color:#d97706;font-weight:700;">Due in ' . $days_vacc . ' day' . ($days_vacc === 1 ? '' : 's') . '</span> (' . date('M d, Y', $next_vacc_ts) . ')';
+    } else {
+        $next_vacc_display = date('M d, Y', $next_vacc_ts);
+    }
+}
+
+// Compute next upcoming deworming date
+$next_dew_display = 'None scheduled';
+$next_dew_ts = null;
+foreach ($dewormings as $d) {
+    $key = strtolower(trim((string)($d['product_name'] ?? '')));
+    $date_ts = strtotime((string)($d['date_given'] ?? ''));
+    if ($key !== '' && isset($latest_deworm[$key]) && $date_ts !== false && $date_ts < $latest_deworm[$key]) {
+        continue;
+    }
+    $nd = (string)($d['next_due_date'] ?? '');
+    if ($nd === '' || $nd === '0000-00-00') continue;
+    $ts = strtotime($nd);
+    if ($ts !== false && $ts > 0 && ($next_dew_ts === null || $ts < $next_dew_ts)) {
+        $next_dew_ts = $ts;
+    }
+}
+if ($next_dew_ts !== null) {
+    $days_dew = (int)(($next_dew_ts - strtotime(date('Y-m-d'))) / 86400);
+    if ($days_dew < 0) {
+        $next_dew_display = '<span style="color:#dc2626;font-weight:700;">Overdue</span> (' . date('M d, Y', $next_dew_ts) . ')';
+    } elseif ($days_dew === 0) {
+        $next_dew_display = '<span style="color:#d97706;font-weight:700;">Due today</span>';
+    } elseif ($days_dew <= 7) {
+        $next_dew_display = '<span style="color:#d97706;font-weight:700;">Due in ' . $days_dew . ' day' . ($days_dew === 1 ? '' : 's') . '</span> (' . date('M d, Y', $next_dew_ts) . ')';
+    } else {
+        $next_dew_display = date('M d, Y', $next_dew_ts);
+    }
+}
+
+// Compute next upcoming followup/treatment date
+$next_treat_display = 'None scheduled';
+$next_treat_ts = null;
+foreach ($treatments as $t) {
+    $key = strtolower(trim((string)($t['diagnosis'] ?? 'follow-up')));
+    if ($key === '') {
+        $key = 'follow-up';
+    }
+    $date_ts = strtotime((string)($t['treatment_date'] ?? ''));
+    if (isset($latest_treatment[$key]) && $date_ts !== false && $date_ts < $latest_treatment[$key]) {
+        continue;
+    }
+    $nd = (string)($t['followup_date'] ?? '');
+    if ($nd === '' || $nd === '0000-00-00') continue;
+    $ts = strtotime($nd);
+    if ($ts !== false && $ts > 0 && ($next_treat_ts === null || $ts < $next_treat_ts)) {
+        $next_treat_ts = $ts;
+    }
+}
+if ($next_treat_ts !== null) {
+    $days_treat = (int)(($next_treat_ts - strtotime(date('Y-m-d'))) / 86400);
+    if ($days_treat < 0) {
+        $next_treat_display = '<span style="color:#dc2626;font-weight:700;">Overdue</span> (' . date('M d, Y', $next_treat_ts) . ')';
+    } elseif ($days_treat === 0) {
+        $next_treat_display = '<span style="color:#d97706;font-weight:700;">Due today</span>';
+    } elseif ($days_treat <= 7) {
+        $next_treat_display = '<span style="color:#d97706;font-weight:700;">Due in ' . $days_treat . ' day' . ($days_treat === 1 ? '' : 's') . '</span> (' . date('M d, Y', $next_treat_ts) . ')';
+    } else {
+        $next_treat_display = date('M d, Y', $next_treat_ts);
+    }
+}
+
+function owner_due_status_html($due_date, $has_newer)
+{
+    if ($has_newer) {
+        return '<span style="color:#16a34a;font-weight:700;">Completed</span>';
+    }
+
+    if ($due_date === null || $due_date === '' || $due_date === '0000-00-00') {
+        return '<span style="color:#9ca3af;">No next date</span>';
+    }
+
+    $due_ts = strtotime($due_date);
+    if ($due_ts === false) {
+        return '<span style="color:#9ca3af;">No next date</span>';
+    }
+
+    $days = (int)(($due_ts - strtotime(date('Y-m-d'))) / 86400);
+
+    if ($days < 0) {
+        return '<span style="color:#dc2626;font-weight:700;">Overdue</span> (' . date('M d, Y', $due_ts) . ')';
+    }
+    if ($days === 0) {
+        return '<span style="color:#d97706;font-weight:700;">Due today</span>';
+    }
+    if ($days <= 3) {
+        return '<span style="color:#d97706;font-weight:700;">Due in 3 days</span> (' . date('M d, Y', $due_ts) . ')';
+    }
+    if ($days <= 7) {
+        return '<span style="color:#0d9488;font-weight:700;">Due in 7 days</span> (' . date('M d, Y', $due_ts) . ')';
+    }
+
     return date('M d, Y', $due_ts);
 }
 
-// Priority: nearest upcoming date first; if none, latest overdue; if none, show no schedule.
-$next_vacc_ts = owner_pick_priority_due_ts($vaccinations, 'next_due_date');
-$next_vacc_display = owner_due_display($next_vacc_ts);
-
-$next_dew_ts = owner_pick_priority_due_ts($dewormings, 'next_due_date');
-$next_dew_display = owner_due_display($next_dew_ts);
-
-$next_treat_ts = owner_pick_priority_due_ts($treatments, 'followup_date');
-$next_treat_display = owner_due_display($next_treat_ts);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -218,6 +337,17 @@ $next_treat_display = owner_due_display($next_treat_ts);
                 <div>
                     <div style="font-size: 0.8rem; color: #6b7280; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;">Weight</div>
                     <div style="font-size: 1.25rem; font-weight: 700; color: #1f2937;"><?= htmlspecialchars($pet['weight']) ?></div>
+                </div>
+                <div>
+                    <div style="font-size: 0.8rem; color: #6b7280; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;">Vet</div>
+                    <div style="font-size: 1rem; font-weight: 700; color: #1f2937;">
+                        <?= htmlspecialchars(trim((string)($pet['vet_name'] ?? '')) !== '' ? 'Dr. ' . trim((string)$pet['vet_name']) : 'Not assigned') ?>
+                    </div>
+                    <?php if (!empty($pet['clinic_name'])): ?>
+                        <div style="font-size: 0.85rem; color: #6b7280;">
+                            <?= htmlspecialchars($pet['clinic_name']) ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
                 <div>
                     <div style="font-size: 0.8rem; color: #6b7280; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;">Allergies</div>
@@ -260,20 +390,28 @@ $next_treat_display = owner_due_display($next_treat_ts);
                                 <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Date Given</th>
                                 <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Next Due</th>
                                 <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Dose</th>
+                                <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Status</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($vaccinations)): ?>
                             <tr>
-                                <td colspan="4" style="padding: 24px 0; text-align: center; color: #9ca3af;">No vaccination records found</td>
+                                <td colspan="5" style="padding: 24px 0; text-align: center; color: #9ca3af;">No vaccination records found</td>
                             </tr>
                             <?php else: ?>
                             <?php foreach ($vaccinations as $vac): ?>
+                            <?php
+                                $vac_key = strtolower(trim((string)($vac['vaccine_name'] ?? '')));
+                                $vac_date_ts = strtotime((string)($vac['date_given'] ?? ''));
+                                $vac_has_newer = $vac_key !== '' && isset($latest_vacc[$vac_key]) && $vac_date_ts !== false && $vac_date_ts < $latest_vacc[$vac_key];
+                                $vac_status_html = owner_due_status_html($vac['next_due_date'] ?? '', $vac_has_newer);
+                            ?>
                             <tr style="border-bottom: 1px solid #e5e7eb;">
                                 <td style="padding: 14px 0; color: #1f2937;"><?= htmlspecialchars($vac['vaccine_name']) ?></td>
                                 <td style="padding: 14px 0; color: #1f2937;"><?= date('M d, Y', strtotime($vac['date_given'])) ?></td>
                                 <td style="padding: 14px 0; color: #1f2937;"><?= !empty($vac['next_due_date']) && $vac['next_due_date'] !== '0000-00-00' ? date('M d, Y', strtotime($vac['next_due_date'])) : '—' ?></td>
                                 <td style="padding: 14px 0; color: #1f2937;"><?= htmlspecialchars($vac['dose_number']) ?></td>
+                                <td style="padding: 14px 0; color: #1f2937;"><?= $vac_status_html ?></td>
                             </tr>
                             <?php endforeach; ?>
                             <?php endif; ?>
@@ -292,20 +430,28 @@ $next_treat_display = owner_due_display($next_treat_ts);
                                 <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Date Given</th>
                                 <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Next Due</th>
                                 <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Dose</th>
+                                <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Status</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($dewormings)): ?>
                             <tr>
-                                <td colspan="4" style="padding: 24px 0; text-align: center; color: #9ca3af;">No deworming records found</td>
+                                <td colspan="5" style="padding: 24px 0; text-align: center; color: #9ca3af;">No deworming records found</td>
                             </tr>
                             <?php else: ?>
                             <?php foreach ($dewormings as $dew): ?>
+                            <?php
+                                $dew_key = strtolower(trim((string)($dew['product_name'] ?? '')));
+                                $dew_date_ts = strtotime((string)($dew['date_given'] ?? ''));
+                                $dew_has_newer = $dew_key !== '' && isset($latest_deworm[$dew_key]) && $dew_date_ts !== false && $dew_date_ts < $latest_deworm[$dew_key];
+                                $dew_status_html = owner_due_status_html($dew['next_due_date'] ?? '', $dew_has_newer);
+                            ?>
                             <tr style="border-bottom: 1px solid #e5e7eb;">
                                 <td style="padding: 14px 0; color: #1f2937;"><?= htmlspecialchars($dew['product_name']) ?></td>
                                 <td style="padding: 14px 0; color: #1f2937;"><?= date('M d, Y', strtotime($dew['date_given'])) ?></td>
                                 <td style="padding: 14px 0; color: #1f2937;"><?= !empty($dew['next_due_date']) && $dew['next_due_date'] !== '0000-00-00' ? date('M d, Y', strtotime($dew['next_due_date'])) : '—' ?></td>
                                 <td style="padding: 14px 0; color: #1f2937;"><?= htmlspecialchars($dew['dose']) ?></td>
+                                <td style="padding: 14px 0; color: #1f2937;"><?= $dew_status_html ?></td>
                             </tr>
                             <?php endforeach; ?>
                             <?php endif; ?>
@@ -324,13 +470,14 @@ $next_treat_display = owner_due_display($next_treat_ts);
                                 <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Treatment</th>
                                 <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Date</th>
                                 <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Follow-up Date</th>
+                                <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Status</th>
                                 <th style="text-align: left; padding: 12px 0; font-weight: 600; color: #6b7280; text-transform: uppercase; font-size: 0.75rem;">Severity</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($treatments)): ?>
                             <tr>
-                                <td colspan="5" style="padding: 24px 0; text-align: center; color: #9ca3af;">No treatment records found</td>
+                                <td colspan="6" style="padding: 24px 0; text-align: center; color: #9ca3af;">No treatment records found</td>
                             </tr>
                             <?php else: ?>
                             <?php foreach ($treatments as $treat): ?>
@@ -338,30 +485,24 @@ $next_treat_display = owner_due_display($next_treat_ts);
                                 $sev = strtolower((string)($treat['severity'] ?? ''));
                                 $sev_bg    = $sev === 'critical' ? '#fee2e2' : ($sev === 'severe' ? '#fef3c7' : ($sev === 'moderate' ? '#fef9c3' : '#dcfce7'));
                                 $sev_color = $sev === 'critical' ? '#991b1b' : ($sev === 'severe' ? '#92400e' : ($sev === 'moderate' ? '#713f12' : '#166534'));
+                                $diag_key = strtolower(trim((string)($treat['diagnosis'] ?? 'follow-up')));
+                                if ($diag_key === '') {
+                                    $diag_key = 'follow-up';
+                                }
+                                $treat_date_ts = strtotime((string)($treat['treatment_date'] ?? ''));
+                                $treat_has_newer = isset($latest_treatment[$diag_key]) && $treat_date_ts !== false && $treat_date_ts < $latest_treatment[$diag_key];
+                                $treat_status_html = owner_due_status_html($treat['followup_date'] ?? '', $treat_has_newer);
                             ?>
                             <tr style="border-bottom: 1px solid #e5e7eb;">
                                 <td style="padding: 14px 0; color: #1f2937;"><?= htmlspecialchars($treat['diagnosis']) ?></td>
                                 <td style="padding: 14px 0; color: #1f2937;"><?= htmlspecialchars($treat['treatment'] ?? '—') ?></td>
                                 <td style="padding: 14px 0; color: #1f2937;"><?= date('M d, Y', strtotime($treat['treatment_date'])) ?></td>
                                 <td style="padding: 14px 0; color: #1f2937;">
-                                    <?php if (!empty($treat['followup_date']) && $treat['followup_date'] !== '0000-00-00'): ?>
-                                        <?php
-                                            $fd_ts = strtotime($treat['followup_date']);
-                                            $fd_days = (int)(($fd_ts - strtotime(date('Y-m-d'))) / 86400);
-                                            if ($fd_days < 0) {
-                                                echo '<span style="color:#dc2626;font-weight:700;">Overdue</span> (' . date('M d, Y', $fd_ts) . ')';
-                                            } elseif ($fd_days === 0) {
-                                                echo '<span style="color:#d97706;font-weight:700;">Today</span>';
-                                            } elseif ($fd_days <= 7) {
-                                                echo '<span style="color:#d97706;font-weight:700;">In ' . $fd_days . ' day' . ($fd_days === 1 ? '' : 's') . '</span> (' . date('M d, Y', $fd_ts) . ')';
-                                            } else {
-                                                echo date('M d, Y', $fd_ts);
-                                            }
-                                        ?>
-                                    <?php else: ?>
-                                        <span style="color:#9ca3af;">—</span>
-                                    <?php endif; ?>
+                                    <?= !empty($treat['followup_date']) && $treat['followup_date'] !== '0000-00-00'
+                                        ? date('M d, Y', strtotime($treat['followup_date']))
+                                        : '<span style="color:#9ca3af;">—</span>' ?>
                                 </td>
+                                <td style="padding: 14px 0; color: #1f2937;"><?= $treat_status_html ?></td>
                                 <td style="padding: 14px 0;">
                                     <span style="background:<?= $sev_bg ?>; color:<?= $sev_color ?>; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600;">
                                         <?= htmlspecialchars(ucfirst($treat['severity'] ?? '')) ?>

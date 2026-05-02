@@ -189,16 +189,16 @@ $vaccinations = [];
 $today = new DateTime(date('Y-m-d'));
 
 if ($vet_id > 0) {
-    $list_where = "v.vet_id = $vet_id AND v.reminder_status = 'active'";
+    $list_where = "v.vet_id = $vet_id";
     if ($view_mode === 'due_week') {
-        $list_where .= " AND v.next_due_date IS NOT NULL AND v.next_due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)";
+        $list_where .= " AND v.reminder_status = 'active' AND v.next_due_date IS NOT NULL AND v.next_due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)";
     } elseif ($view_mode === 'overdue') {
-        $list_where .= " AND v.next_due_date IS NOT NULL AND v.next_due_date < CURDATE()";
+        $list_where .= " AND v.reminder_status = 'active' AND v.next_due_date IS NOT NULL AND v.next_due_date < CURDATE()";
     }
 
     $vaccination_query = mysqli_query(
         $conn,
-        "SELECT v.id, v.vaccine_name, v.date_given, v.next_due_date, v.dose_number,
+        "SELECT v.id, v.vaccine_name, v.date_given, v.next_due_date, v.dose_number, v.reminder_status,
                 p.name AS pet_name, p.species,
                 CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,'')) AS owner_name,
                 u.email AS owner_email,
@@ -345,9 +345,14 @@ if ($view_mode === 'due_week') {
                         <?php else: ?>
                             <?php foreach ($vaccinations as $row): ?>
                                 <?php
-                                $due_status = get_due_status($row['next_due_date'] ?? null);
-                                $status_label = $due_status['label'];
-                                $status_class = $due_status['class'];
+                                if (($row['reminder_status'] ?? 'active') === 'completed') {
+                                    $status_label = 'Completed';
+                                    $status_class = 'vet-pill-status';
+                                } else {
+                                    $due_status = get_due_status($row['next_due_date'] ?? null);
+                                    $status_label = $due_status['label'];
+                                    $status_class = $due_status['class'];
+                                }
                                 ?>
                                 <tr>
                                     <td><?= htmlspecialchars($row['pet_name']) ?></td>

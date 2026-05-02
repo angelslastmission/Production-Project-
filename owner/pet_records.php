@@ -32,7 +32,13 @@ function calculate_age($dob) {
 
 $pets = [];
 $pets_stmt = mysqli_prepare($conn,
-    "SELECT id, name, species, breed, dob, status FROM pets WHERE owner_id = ? ORDER BY name ASC");
+    "SELECT p.id, p.name, p.species, p.breed, p.dob, p.status,
+            CONCAT(COALESCE(v.first_name, ''), ' ', COALESCE(v.last_name, '')) AS vet_name,
+            v.clinic_name
+     FROM pets p
+     LEFT JOIN users v ON v.id = p.vet_id AND v.role = 'vet'
+     WHERE p.owner_id = ?
+     ORDER BY p.name ASC");
 if ($pets_stmt) {
     mysqli_stmt_bind_param($pets_stmt, 'i', $owner_id);
     mysqli_stmt_execute($pets_stmt);
@@ -88,22 +94,11 @@ if ($pets_stmt) {
                 <?php else: ?>
                     <?php foreach ($pets as $pet): ?>
                     <?php
-                    $vax_label = 'Not vaccinated';
-                    $vax_class = 'owner-status-overdue';
                     $next_due_text = 'No vaccination scheduled';
 
                     if (!empty($pet['last_vaccine']) && !empty($pet['last_vaccine']['next_due_date'])) {
                         $next_due = new DateTime($pet['last_vaccine']['next_due_date']);
                         $today = new DateTime();
-
-                        if ($today > $next_due) {
-                            $vax_label = 'OVERDUE';
-                            $vax_class = 'owner-status-overdue';
-                        } else {
-                            $vax_label = 'UP TO DATE';
-                            $vax_class = 'owner-status-updated';
-                        }
-
                         $next_due_text = $pet['last_vaccine']['vaccine_name'] . ' (' . date('M Y', strtotime($pet['last_vaccine']['next_due_date'])) . ')';
                     }
 
@@ -116,9 +111,14 @@ if ($pets_stmt) {
                                 <h5 class="owner-pet-name"><?= htmlspecialchars($pet['name']) ?></h5>
                                 <p class="owner-pet-breed"><?= htmlspecialchars($pet['species']) ?> · <?= htmlspecialchars($age) ?></p>
                             </div>
-                            <span class="owner-pet-status <?= $vax_class ?>"><?= $vax_label ?></span>
                         </div>
                         <div class="owner-pet-info">
+                            <div class="owner-pet-info-row">
+                                <span class="owner-info-label">Vet:</span>
+                                <span class="owner-info-value">
+                                    <?= htmlspecialchars(trim((string)($pet['vet_name'] ?? '')) !== '' ? 'Dr. ' . trim((string)$pet['vet_name']) : 'Not assigned') ?>
+                                </span>
+                            </div>
                             <div class="owner-pet-info-row">
                                 <span class="owner-info-label">Breed:</span>
                                 <span class="owner-info-value"><?= htmlspecialchars($pet['breed'] ?: 'N/A') ?></span>

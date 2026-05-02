@@ -177,10 +177,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                          WHERE pet_id = ?
                            AND vet_id = ?
                            AND vaccine_name = ?
-                           AND id <> ?"
+                           AND id <> ?
+                           AND reminder_status = 'active'
+                           AND (next_due_date IS NULL OR next_due_date <= ?)"
                     );
                     if ($complete_old_vac_stmt) {
-                        mysqli_stmt_bind_param($complete_old_vac_stmt, 'iisi', $pet_id, $vet_id, $vaccination_form['vaccine_name'], $vaccination_id);
+                        mysqli_stmt_bind_param($complete_old_vac_stmt, 'iisis', $pet_id, $vet_id, $vaccination_form['vaccine_name'], $vaccination_id, $vaccination_form['date_given']);
                         mysqli_stmt_execute($complete_old_vac_stmt);
                         mysqli_stmt_close($complete_old_vac_stmt);
                     }
@@ -268,10 +270,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                          WHERE pet_id = ?
                            AND vet_id = ?
                            AND product_name = ?
-                           AND id <> ?"
+                           AND id <> ?
+                           AND reminder_status = 'active'
+                           AND (next_due_date IS NULL OR next_due_date <= ?)"
                     );
                     if ($complete_old_deworm_stmt) {
-                        mysqli_stmt_bind_param($complete_old_deworm_stmt, 'iisi', $pet_id, $vet_id, $deworming_form['product_name'], $deworming_id);
+                        mysqli_stmt_bind_param($complete_old_deworm_stmt, 'iisis', $pet_id, $vet_id, $deworming_form['product_name'], $deworming_id, $deworming_form['date_given']);
                         mysqli_stmt_execute($complete_old_deworm_stmt);
                         mysqli_stmt_close($complete_old_deworm_stmt);
                     }
@@ -335,10 +339,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                          WHERE pet_id = ?
                            AND vet_id = ?
                            AND diagnosis = ?
-                           AND id <> ?"
+                           AND id <> ?
+                           AND followup_status = 'active'
+                           AND (followup_date IS NULL OR followup_date <= ?)"
                     );
                     if ($complete_old_treatment_stmt) {
-                        mysqli_stmt_bind_param($complete_old_treatment_stmt, 'iisi', $pet_id, $vet_id, $t_diagnosis, $treatment_id);
+                        mysqli_stmt_bind_param($complete_old_treatment_stmt, 'iisis', $pet_id, $vet_id, $t_diagnosis, $treatment_id, $t_date);
                         mysqli_stmt_execute($complete_old_treatment_stmt);
                         mysqli_stmt_close($complete_old_treatment_stmt);
                     }
@@ -361,9 +367,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $treatments = [];
 $treatments_stmt = mysqli_prepare(
     $conn,
-    "SELECT id, diagnosis, treatment, treatment_date, followup_date, severity, notes
+    "SELECT id, diagnosis, treatment, treatment_date, followup_date, followup_status, severity, notes
      FROM treatments
-     WHERE pet_id = ? AND vet_id = ? AND followup_status = 'active'
+     WHERE pet_id = ? AND vet_id = ?
      ORDER BY treatment_date DESC, id DESC"
 );
 if ($treatments_stmt) {
@@ -379,9 +385,9 @@ if ($treatments_stmt) {
 $vaccinations = [];
 $vaccinations_stmt = mysqli_prepare(
     $conn,
-    "SELECT vaccine_name, date_given, next_due_date, dose_number, batch_number, notes
+    "SELECT vaccine_name, date_given, next_due_date, reminder_status, dose_number, batch_number, notes
      FROM vaccinations
-     WHERE pet_id = ? AND vet_id = ? AND reminder_status = 'active'
+     WHERE pet_id = ? AND vet_id = ?
      ORDER BY date_given DESC, id DESC"
 );
 
@@ -398,9 +404,9 @@ if ($vaccinations_stmt) {
 $dewormings = [];
 $dewormings_stmt = mysqli_prepare(
     $conn,
-    "SELECT product_name, date_given, next_due_date, dose, notes
+    "SELECT product_name, date_given, next_due_date, reminder_status, dose, notes
      FROM dewormings
-     WHERE pet_id = ? AND vet_id = ? AND reminder_status = 'active'
+     WHERE pet_id = ? AND vet_id = ?
      ORDER BY date_given DESC, id DESC"
 );
 
@@ -653,7 +659,13 @@ $pet_age = get_age_label($pet['dob']);
                             <tr><td colspan="5" class="text-center py-4 text-muted">No vaccination records yet</td></tr>
                             <?php else: ?>
                                 <?php foreach ($vaccinations as $row): ?>
-                                <?php $due_status = petcura_due_status($row['next_due_date'] ?? null); ?>
+                                <?php
+                                    if (($row['reminder_status'] ?? 'active') === 'completed') {
+                                        $due_status = ['label' => 'Completed', 'class' => 'vet-pill-status'];
+                                    } else {
+                                        $due_status = petcura_due_status($row['next_due_date'] ?? null);
+                                    }
+                                ?>
                                 <tr>
                                     <td><?= htmlspecialchars($row['vaccine_name']) ?></td>
                                     <td><?= htmlspecialchars(date('M d, Y', strtotime($row['date_given']))) ?></td>
@@ -688,7 +700,13 @@ $pet_age = get_age_label($pet['dob']);
                             <tr><td colspan="5" class="text-center py-4 text-muted">No deworming records yet</td></tr>
                             <?php else: ?>
                                 <?php foreach ($dewormings as $row): ?>
-                                <?php $due_status = petcura_due_status($row['next_due_date'] ?? null); ?>
+                                <?php
+                                    if (($row['reminder_status'] ?? 'active') === 'completed') {
+                                        $due_status = ['label' => 'Completed', 'class' => 'vet-pill-status'];
+                                    } else {
+                                        $due_status = petcura_due_status($row['next_due_date'] ?? null);
+                                    }
+                                ?>
                                 <tr>
                                     <td><?= htmlspecialchars($row['product_name']) ?></td>
                                     <td><?= htmlspecialchars(date('M d, Y', strtotime($row['date_given']))) ?></td>
@@ -717,16 +735,25 @@ $pet_age = get_age_label($pet['dob']);
                             <th>Treatment</th>
                             <th>Date</th>
                             <th>Follow-up</th>
+                            <th>Follow-up status</th>
                             <th>Severity</th>
                             <th>Notes</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (empty($treatments)): ?>
-                        <tr><td colspan="6" class="text-center py-4 text-muted">No treatment records yet</td></tr>
+                        <tr><td colspan="7" class="text-center py-4 text-muted">No treatment records yet</td></tr>
                         <?php else: ?>
                             <?php foreach ($treatments as $row): ?>
                             <?php
+                                if (($row['followup_status'] ?? 'active') === 'completed') {
+                                    $followup_status = ['label' => 'Completed', 'class' => 'vet-pill-status'];
+                                } elseif (empty($row['followup_date'])) {
+                                    $followup_status = ['label' => 'No follow-up', 'class' => 'vet-pill-status'];
+                                } else {
+                                    $followup_status = petcura_due_status($row['followup_date']);
+                                }
+
                                 $sev_class = match($row['severity'] ?? '') {
                                     'critical' => 'vet-pill-overdue',
                                     'severe'   => 'vet-pill-overdue',
@@ -739,6 +766,7 @@ $pet_age = get_age_label($pet['dob']);
                                 <td><?= htmlspecialchars($row['treatment'] ?? 'N/A') ?></td>
                                 <td><?= htmlspecialchars(date('M d, Y', strtotime($row['treatment_date']))) ?></td>
                                 <td><?= !empty($row['followup_date']) ? htmlspecialchars(date('M d, Y', strtotime($row['followup_date']))) : 'N/A' ?></td>
+                                <td><span class="vet-pill <?= htmlspecialchars($followup_status['class']) ?>"><?= htmlspecialchars($followup_status['label']) ?></span></td>
                                 <td><span class="vet-pill <?= $sev_class ?>"><?= htmlspecialchars(ucfirst($row['severity'] ?? 'N/A')) ?></span></td>
                                 <td><?= htmlspecialchars($row['notes'] ?? '') ?></td>
                             </tr>
