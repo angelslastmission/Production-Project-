@@ -8,4 +8,4 @@ define('CLI_MODE', true);
 
 chdir(__DIR__);
 
-include __DIR__ . '/send_reminder_emails.php';
+include __DIR__ . '/send_sms_reminders.php';

@@ -143,7 +143,7 @@ function email_sender_event_for_due(string $dueDate, array $settings): ?array {
         return ['key' => 'due_date', 'label' => 'on due date'];
     }
 
-    if ($daysLeft <= -1 && !empty($settings['remind_overdue'])) {
+    if ($daysLeft === -1 && !empty($settings['remind_overdue'])) {
         return ['key' => '1_day_after', 'label' => 'overdue'];
     }
 
@@ -286,82 +286,94 @@ function email_sender_log_attempt(mysqli $conn, int $runId, array $item, array $
 
 email_sender_ensure_schema($conn);
 
-$settings = email_sender_settings($conn);
-$runId = email_sender_start_run($conn);
-
 $results = [];
 $totalSent = 0;
 $totalFailed = 0;
 $totalSkipped = 0;
 $sentTodayTotal = 0;
 $failedTodayTotal = 0;
+$runId = 0;
+$has_run = false;
 
-if (empty($settings['email_reminders'])) {
-    $results[] = ['type' => 'info', 'message' => 'Email reminders are disabled in admin settings.'];
-} elseif (empty($settings['auto_scheduler'])) {
-    $results[] = ['type' => 'info', 'message' => 'Auto reminder scheduler is disabled in admin settings.'];
-} else {
-    $items = admin_get_reminder_monitor_items($conn, null, 500);
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'run_sender') {
+    $has_run = true;
+    $settings = email_sender_settings($conn);
+    $runId = email_sender_start_run($conn);
 
-    foreach ($items as $item) {
-        $event = email_sender_event_for_due((string)$item['due_date'], $settings);
+    if (empty($settings['email_reminders'])) {
+        $results[] = ['type' => 'info', 'message' => 'Email reminders are disabled in admin settings.'];
+    } elseif (empty($settings['auto_scheduler'])) {
+        $results[] = ['type' => 'info', 'message' => 'Auto reminder scheduler is disabled in admin settings.'];
+    } else {
+        $items = admin_get_reminder_monitor_items($conn, null, 500);
 
-        if (!$event) {
-            $totalSkipped++;
-            continue;
-        }
+        foreach ($items as $item) {
+             if (($item['due_status_key'] ?? '') === 'completed') {
+        $totalSkipped++;
+        continue;
+    }
 
-        $owner = email_sender_owner($conn, (int)$item['owner_id']);
+            $event = email_sender_event_for_due((string)$item['due_date'], $settings);
 
-        if (!$owner || empty($owner['email'])) {
-            $totalSkipped++;
-            $results[] = [
-                'type' => 'warning',
-                'message' => 'Skipped ' . ($item['pet_name'] ?? 'pet') . ': owner email missing or owner account inactive.'
-            ];
-            continue;
-        }
+            if (!$event) {
+                $totalSkipped++;
+                continue;
+            }
 
-        $recordType = (string)$item['record_type'];
-        $recordId = (int)$item['record_id'];
-        $eventKey = (string)$event['key'];
-        $recipient = (string)$owner['email'];
+            $owner = email_sender_owner($conn, (int)$item['owner_id']);
 
-        if (email_sender_already_sent($conn, $recordType, $recordId, $eventKey, $recipient)) {
-            $totalSkipped++;
-            continue;
-        }
+            if (!$owner || empty($owner['email'])) {
+                $totalSkipped++;
+                $results[] = [
+                    'type' => 'warning',
+                    'message' => 'Skipped ' . ($item['pet_name'] ?? 'pet') . ': owner email missing or owner account inactive.'
+                ];
+                continue;
+            }
 
-        $message = email_sender_build_message($item, $owner, $event);
+            $recordType = (string)$item['record_type'];
+            $recordId = (int)$item['record_id'];
+            $eventKey = (string)$event['key'];
+            $recipient = (string)$owner['email'];
 
-        $sendResult = petcura_send_system_email(
-            $recipient,
-            trim((string)$owner['name']),
-            $message['subject'],
-            $message['html'],
-            $message['plain']
-        );
+            if (email_sender_already_sent($conn, $recordType, $recordId, $eventKey, $recipient)) {
+                $totalSkipped++;
+                continue;
+            }
 
-        if (!empty($sendResult['success'])) {
-            email_sender_log_attempt($conn, $runId, $item, $owner, $event, $message, 'sent');
-            $totalSent++;
-            $results[] = [
-                'type' => 'success',
-                'message' => 'Sent ' . $event['label'] . ' email to ' . $recipient . ' for ' . $item['pet_name'] . '.'
-            ];
-        } else {
-            $errorText = (string)($sendResult['error'] ?? 'Unknown mailer error');
-            email_sender_log_attempt($conn, $runId, $item, $owner, $event, $message, 'failed', $errorText);
-            $totalFailed++;
-            $results[] = [
-                'type' => 'danger',
-                'message' => 'Failed for ' . $recipient . ': ' . $errorText
-            ];
+            $message = email_sender_build_message($item, $owner, $event);
+
+            $sendResult = petcura_send_system_email(
+                $recipient,
+                trim((string)$owner['name']),
+                $message['subject'],
+                $message['html'],
+                $message['plain']
+            );
+
+            if (!empty($sendResult['success'])) {
+                email_sender_log_attempt($conn, $runId, $item, $owner, $event, $message, 'sent');
+                $totalSent++;
+                $results[] = [
+                    'type' => 'success',
+                    'message' => 'Sent ' . $event['label'] . ' email to ' . $recipient . ' for ' . $item['pet_name'] . '.'
+                ];
+            } else {
+                $errorText = (string)($sendResult['error'] ?? 'Unknown mailer error');
+                email_sender_log_attempt($conn, $runId, $item, $owner, $event, $message, 'failed', $errorText);
+                $totalFailed++;
+                $results[] = [
+                    'type' => 'danger',
+                    'message' => 'Failed for ' . $recipient . ': ' . $errorText
+                ];
+            }
         }
     }
-}
 
-email_sender_finish_run($conn, $runId, $totalSent, $totalFailed, $totalSkipped);
+    email_sender_finish_run($conn, $runId, $totalSent, $totalFailed, $totalSkipped);
+} else {
+    $results[] = ['type' => 'info', 'message' => 'Click "Run email sender" to send reminders now.'];
+}
 
 $logCountResult = mysqli_query(
     $conn,
@@ -401,12 +413,20 @@ if ($logCountResult) {
                 <h1 class="admin-page-title">Send email reminders</h1>
                 <p class="admin-page-sub">Runs 7-day, 3-day, 1-day, due-date and overdue reminder emails.</p>
             </div>
+            <div>
+                <form method="POST" class="d-inline">
+                    <input type="hidden" name="action" value="run_sender" />
+                    <button type="submit" class="btn btn-dark">
+                        <i class="bi bi-send-fill me-1"></i> Run email sender
+                    </button>
+                </form>
+            </div>
         </div>
 
         <div class="admin-card mb-3">
             <h5 class="admin-card-title mb-2">Run summary</h5>
             <p class="text-muted mb-3" style="font-size:0.92rem;">
-                Run ID: <strong>#<?= (int)$runId ?></strong>. This sender checks the same records shown in Reminder Monitor.
+                Run ID: <strong><?= $has_run ? '#' . (int)$runId : 'Not started' ?></strong>. This sender checks the same records shown in Reminder Monitor.
             </p>
 
             <div class="row g-3">

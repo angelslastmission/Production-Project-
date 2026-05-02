@@ -136,11 +136,9 @@ if (!function_exists('admin_latest_reminder_info')) {
         $record_type = (string)($item['record_type'] ?? '');
         $record_id = (int)($item['record_id'] ?? 0);
 
-        /*
-         * For the admin monitor, email logs are the source of truth.
-         * Old vet "Send now" notifications may have marked reminders.status = sent
-         * without actually sending an email, so do not trust reminders.status alone.
-         */
+        $email_log = null;
+        $sms_log = null;
+
         if ($record_id > 0 && admin_column_exists($conn, 'reminder_email_logs', 'record_type')) {
             $stmt = mysqli_prepare(
                 $conn,
@@ -155,22 +153,81 @@ if (!function_exists('admin_latest_reminder_info')) {
                 mysqli_stmt_bind_param($stmt, 'si', $record_type, $record_id);
                 mysqli_stmt_execute($stmt);
                 $result = mysqli_stmt_get_result($stmt);
-                $row = $result ? mysqli_fetch_assoc($result) : null;
+                $email_log = $result ? mysqli_fetch_assoc($result) : null;
                 mysqli_stmt_close($stmt);
-
-                if ($row) {
-                    return [
-                        'status' => $row['status'] === 'failed' ? 'failed' : 'sent',
-                        'channel' => 'email',
-                        'sent_at' => $row['sent_at'] ?? '',
-                        'created_at' => $row['sent_at'] ?? '',
-                        'message' => ($row['status'] === 'failed' ? ($row['error_message'] ?? '') : ($row['message_preview'] ?? ''))
-                    ];
-                }
             }
         }
 
-        // If no email log exists yet, show not_sent. Keep created_at only for reference.
+        if ($record_id > 0 && admin_column_exists($conn, 'reminder_sms_logs', 'record_type')) {
+            $stmt = mysqli_prepare(
+                $conn,
+                "SELECT status, sent_at, message_preview, error_message
+                 FROM reminder_sms_logs
+                 WHERE record_type = ?
+                   AND record_id = ?
+                 ORDER BY sent_at DESC, id DESC
+                 LIMIT 1"
+            );
+            if ($stmt) {
+                mysqli_stmt_bind_param($stmt, 'si', $record_type, $record_id);
+                mysqli_stmt_execute($stmt);
+                $result = mysqli_stmt_get_result($stmt);
+                $sms_log = $result ? mysqli_fetch_assoc($result) : null;
+                mysqli_stmt_close($stmt);
+            }
+        }
+
+        $email_status = $email_log ? ($email_log['status'] === 'failed' ? 'failed' : 'sent') : '';
+        $sms_status = $sms_log ? ($sms_log['status'] === 'failed' ? 'failed' : 'sent') : '';
+
+        $has_email = $email_log !== null;
+        $has_sms = $sms_log !== null;
+
+        $channel = '';
+        if ($has_email && $has_sms) {
+            $channel = 'both';
+        } elseif ($has_email) {
+            $channel = 'email';
+        } elseif ($has_sms) {
+            $channel = 'sms';
+        }
+
+        $status = 'not_sent';
+        if ($email_status === 'sent' || $sms_status === 'sent') {
+            $status = 'sent';
+        } elseif ($email_status === 'failed' || $sms_status === 'failed') {
+            $status = 'failed';
+        }
+
+        $sent_at = '';
+        $message = '';
+        $email_time = $email_log['sent_at'] ?? '';
+        $sms_time = $sms_log['sent_at'] ?? '';
+
+        if ($email_time !== '' && $sms_time !== '') {
+            $sent_at = strtotime($email_time) >= strtotime($sms_time) ? $email_time : $sms_time;
+        } elseif ($email_time !== '') {
+            $sent_at = $email_time;
+        } elseif ($sms_time !== '') {
+            $sent_at = $sms_time;
+        }
+
+        if ($status === 'failed') {
+            $message = (string)($email_log['error_message'] ?? ($sms_log['error_message'] ?? ''));
+        } elseif ($status === 'sent') {
+            $message = (string)($email_log['message_preview'] ?? ($sms_log['message_preview'] ?? ''));
+        }
+
+        if ($status !== 'not_sent') {
+            return [
+                'status' => $status,
+                'channel' => $channel,
+                'sent_at' => $sent_at,
+                'created_at' => $sent_at,
+                'message' => $message
+            ];
+        }
+
         if (admin_reminders_advanced_supported($conn) && $record_id > 0) {
             $stmt = mysqli_prepare(
                 $conn,
@@ -186,6 +243,7 @@ if (!function_exists('admin_latest_reminder_info')) {
                 $result = mysqli_stmt_get_result($stmt);
                 $row = $result ? mysqli_fetch_assoc($result) : null;
                 mysqli_stmt_close($stmt);
+
                 if ($row) {
                     $default['created_at'] = $row['created_at'] ?? '';
                     $default['message'] = $row['message'] ?? '';
@@ -196,11 +254,13 @@ if (!function_exists('admin_latest_reminder_info')) {
         return $default;
     }
 }
+
 if (!function_exists('admin_get_reminder_monitor_items')) {
     function admin_get_reminder_monitor_items($conn, $days = null, $limit = 300)
     {
         $items = [];
         $days_sql = '';
+
         if ($days !== null) {
             $days = (int)$days;
             if ($days < 1) $days = 7;
@@ -210,65 +270,96 @@ if (!function_exists('admin_get_reminder_monitor_items')) {
         $limit = (int)$limit;
         if ($limit < 1) $limit = 300;
 
+        /*
+            FIX:
+            - Old records are NOT removed anymore.
+            - If newer same treatment/vaccine/deworming record exists, old one shows Completed.
+            - New/latest record still shows Overdue / Due today / Due soon / Upcoming.
+        */
+
         $sql = "
             SELECT * FROM (
-                SELECT v.id AS record_id,
-                       'vaccination' AS record_type,
-                       v.vaccine_name AS title,
-                       v.next_due_date AS due_date,
-                       p.id AS pet_id,
-                       p.name AS pet_name,
-                       p.owner_id AS owner_id,
-                       v.vet_id AS vet_id,
-                       CONCAT(COALESCE(o.first_name, ''), ' ', COALESCE(o.last_name, '')) AS owner_name,
-                       CONCAT(COALESCE(vet.first_name, ''), ' ', COALESCE(vet.last_name, '')) AS vet_name
+                SELECT 
+                    v.id AS record_id,
+                    'vaccination' AS record_type,
+                    v.vaccine_name AS title,
+                    v.date_given AS record_date,
+                    v.next_due_date AS due_date,
+                    v.reminder_status AS source_status,
+                    (
+                        SELECT MAX(v2.date_given)
+                        FROM vaccinations v2
+                        WHERE v2.pet_id = v.pet_id
+                          AND v2.vet_id = v.vet_id
+                          AND LOWER(TRIM(COALESCE(v2.vaccine_name, ''))) = LOWER(TRIM(COALESCE(v.vaccine_name, '')))
+                    ) AS latest_record_date,
+                    p.id AS pet_id,
+                    p.name AS pet_name,
+                    p.owner_id AS owner_id,
+                    v.vet_id AS vet_id,
+                    CONCAT(COALESCE(o.first_name, ''), ' ', COALESCE(o.last_name, '')) AS owner_name,
+                    CONCAT(COALESCE(vet.first_name, ''), ' ', COALESCE(vet.last_name, '')) AS vet_name
                 FROM vaccinations v
                 JOIN pets p ON p.id = v.pet_id
                 LEFT JOIN users o ON o.id = p.owner_id
                 LEFT JOIN users vet ON vet.id = v.vet_id
                 WHERE v.next_due_date IS NOT NULL
-                  AND v.reminder_status = 'active'
-                  AND NOT EXISTS (SELECT 1 FROM vaccinations v2 WHERE v2.pet_id = v.pet_id AND v2.vet_id = v.vet_id AND v2.vaccine_name = v.vaccine_name AND v2.id > v.id)
 
                 UNION ALL
 
-                SELECT d.id AS record_id,
-                       'deworming' AS record_type,
-                       d.product_name AS title,
-                       d.next_due_date AS due_date,
-                       p.id AS pet_id,
-                       p.name AS pet_name,
-                       p.owner_id AS owner_id,
-                       d.vet_id AS vet_id,
-                       CONCAT(COALESCE(o.first_name, ''), ' ', COALESCE(o.last_name, '')) AS owner_name,
-                       CONCAT(COALESCE(vet.first_name, ''), ' ', COALESCE(vet.last_name, '')) AS vet_name
+                SELECT 
+                    d.id AS record_id,
+                    'deworming' AS record_type,
+                    d.product_name AS title,
+                    d.date_given AS record_date,
+                    d.next_due_date AS due_date,
+                    d.reminder_status AS source_status,
+                    (
+                        SELECT MAX(d2.date_given)
+                        FROM dewormings d2
+                        WHERE d2.pet_id = d.pet_id
+                          AND d2.vet_id = d.vet_id
+                          AND LOWER(TRIM(COALESCE(d2.product_name, ''))) = LOWER(TRIM(COALESCE(d.product_name, '')))
+                    ) AS latest_record_date,
+                    p.id AS pet_id,
+                    p.name AS pet_name,
+                    p.owner_id AS owner_id,
+                    d.vet_id AS vet_id,
+                    CONCAT(COALESCE(o.first_name, ''), ' ', COALESCE(o.last_name, '')) AS owner_name,
+                    CONCAT(COALESCE(vet.first_name, ''), ' ', COALESCE(vet.last_name, '')) AS vet_name
                 FROM dewormings d
                 JOIN pets p ON p.id = d.pet_id
                 LEFT JOIN users o ON o.id = p.owner_id
                 LEFT JOIN users vet ON vet.id = d.vet_id
                 WHERE d.next_due_date IS NOT NULL
-                  AND d.reminder_status = 'active'
-                  AND NOT EXISTS (SELECT 1 FROM dewormings d2 WHERE d2.pet_id = d.pet_id AND d2.vet_id = d.vet_id AND d2.product_name = d.product_name AND d2.id > d.id)
 
                 UNION ALL
 
-                SELECT t.id AS record_id,
-                       'treatment' AS record_type,
-                       COALESCE(NULLIF(TRIM(t.diagnosis), ''), 'Follow-up') AS title,
-                       t.followup_date AS due_date,
-                       p.id AS pet_id,
-                       p.name AS pet_name,
-                       p.owner_id AS owner_id,
-                       t.vet_id AS vet_id,
-                       CONCAT(COALESCE(o.first_name, ''), ' ', COALESCE(o.last_name, '')) AS owner_name,
-                       CONCAT(COALESCE(vet.first_name, ''), ' ', COALESCE(vet.last_name, '')) AS vet_name
+                SELECT 
+                    t.id AS record_id,
+                    'treatment' AS record_type,
+                    COALESCE(NULLIF(TRIM(t.diagnosis), ''), 'Follow-up') AS title,
+                    t.treatment_date AS record_date,
+                    t.followup_date AS due_date,
+                    t.followup_status AS source_status,
+                    (
+                        SELECT MAX(t2.treatment_date)
+                        FROM treatments t2
+                        WHERE t2.pet_id = t.pet_id
+                          AND t2.vet_id = t.vet_id
+                          AND LOWER(TRIM(COALESCE(t2.diagnosis, 'follow-up'))) = LOWER(TRIM(COALESCE(t.diagnosis, 'follow-up')))
+                    ) AS latest_record_date,
+                    p.id AS pet_id,
+                    p.name AS pet_name,
+                    p.owner_id AS owner_id,
+                    t.vet_id AS vet_id,
+                    CONCAT(COALESCE(o.first_name, ''), ' ', COALESCE(o.last_name, '')) AS owner_name,
+                    CONCAT(COALESCE(vet.first_name, ''), ' ', COALESCE(vet.last_name, '')) AS vet_name
                 FROM treatments t
                 JOIN pets p ON p.id = t.pet_id
                 LEFT JOIN users o ON o.id = p.owner_id
                 LEFT JOIN users vet ON vet.id = t.vet_id
                 WHERE t.followup_date IS NOT NULL
-                  AND t.followup_status = 'active'
-                  AND NOT EXISTS (SELECT 1 FROM treatments t2 WHERE t2.pet_id = t.pet_id AND t2.vet_id = t.vet_id AND COALESCE(t2.diagnosis, '') = COALESCE(t.diagnosis, '') AND t2.id > t.id)
             ) reminder_items
             WHERE due_date IS NOT NULL {$days_sql}
             ORDER BY due_date ASC
@@ -276,19 +367,61 @@ if (!function_exists('admin_get_reminder_monitor_items')) {
         ";
 
         $result = mysqli_query($conn, $sql);
+
         while ($result && $row = mysqli_fetch_assoc($result)) {
             $status = admin_due_status($row['due_date']);
+
+            $has_newer = false;
+
+            if (!empty($row['record_date']) && !empty($row['latest_record_date'])) {
+                $record_ts = strtotime((string)$row['record_date']);
+                $latest_ts = strtotime((string)$row['latest_record_date']);
+
+                if ($record_ts !== false && $latest_ts !== false && $latest_ts > $record_ts) {
+                    $has_newer = true;
+                }
+            }
+
+            /*
+                If newer same record exists:
+                old record = Completed
+            */
+            if ($has_newer) {
+                $status = [
+                    'key' => 'completed',
+                    'label' => 'Completed',
+                    'class' => 'badge-sent'
+                ];
+            }
+
+            /*
+                If record status is not active:
+                also show Completed.
+                But latest active record will still show Overdue / Due soon.
+            */
+            if (!$has_newer && isset($row['source_status']) && $row['source_status'] !== 'active') {
+                $status = [
+                    'key' => 'completed',
+                    'label' => 'Completed',
+                    'class' => 'badge-sent'
+                ];
+            }
+
             $reminder = admin_latest_reminder_info($conn, $row);
+
             $row['owner_name'] = trim((string)$row['owner_name']) !== '' ? trim((string)$row['owner_name']) : 'Unknown owner';
             $row['vet_name'] = trim((string)$row['vet_name']) !== '' ? trim((string)$row['vet_name']) : 'Not assigned';
+
             $row['due_status_key'] = $status['key'];
             $row['due_status_label'] = $status['label'];
             $row['due_status_class'] = $status['class'];
+
             $row['reminder_status'] = $reminder['status'];
             $row['reminder_channel'] = $reminder['channel'];
             $row['reminder_sent_at'] = $reminder['sent_at'];
             $row['reminder_created_at'] = $reminder['created_at'];
             $row['reminder_message'] = $reminder['message'];
+
             $items[] = $row;
         }
 
