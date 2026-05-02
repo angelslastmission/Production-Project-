@@ -2,6 +2,7 @@
 session_start();
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../includes/security.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -81,6 +82,24 @@ if (!ensure_owner_password_resets_table($conn)) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  $rate_action = 'forgot_owner';
+  $count_attempt = false;
+  if (!validate_csrf_token($_POST['csrf_token'] ?? null)) {
+    $error = 'Invalid request. Please refresh and try again.';
+  } else {
+    $rate_error = auth_rate_limit_check($conn, $rate_action);
+    if ($rate_error !== '') {
+      $error = $rate_error;
+    } else {
+      $count_attempt = true;
+    }
+  }
+
+  if ($error !== '') {
+    $count_attempt = false;
+  }
+
+  if ($error === '') {
     $email = trim($_POST['email'] ?? '');
 
   if ($error === '' && $email === '') {
@@ -131,6 +150,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $error = 'Could not verify account.';
     }
     }
+      }
+
+      if ($count_attempt) {
+          auth_rate_limit_register_attempt($conn, $rate_action, false, 5, 900, 900, false);
+      }
 }
 ?>
 <!DOCTYPE html>
@@ -162,6 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <?php endif; ?>
 
     <form method="POST" action="forgot_password.php">
+      <?= csrf_input() ?>
       <div class="mb-3">
         <label class="auth-label">Email address</label>
         <input type="email"

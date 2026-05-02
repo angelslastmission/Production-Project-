@@ -16,6 +16,7 @@ if (isset($_SESSION['user_role'])) {
 }
 
 include 'config.php';
+require_once __DIR__ . '/includes/security.php';
 
 $error         = '';
 $selected_role = isset($_GET['role']) ? $_GET['role'] : 'owner';
@@ -48,9 +49,21 @@ if (!in_array($selected_role, ['vet', 'owner'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email    = trim($_POST['email'] ?? '');
-    $password = $_POST['password'] ?? '';
-    $role     = $_POST['role'] ?? '';
+  $role = $_POST['role'] ?? '';
+  if (!validate_csrf_token($_POST['csrf_token'] ?? null)) {
+    $error = 'Invalid request. Please refresh and try again.';
+  } else {
+  $email    = trim($_POST['email'] ?? '');
+  $password = $_POST['password'] ?? '';
+  $rate_role = in_array($role, ['vet', 'owner'], true) ? $role : 'owner';
+  $rate_action = 'login_' . $rate_role;
+  $rate_error = auth_rate_limit_check($conn, $rate_action);
+  $login_success = false;
+  $count_failure = false;
+
+  if ($rate_error !== '') {
+    $error = $rate_error;
+  } else {
 
     // Only allow vet or owner from this page
     if (!in_array($role, ['vet', 'owner'])) {
@@ -74,8 +87,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (!$user) {
             $error = 'No account found with that email and role.';
+          $count_failure = true;
         } elseif (!password_verify($password, $user['password'])) {
             $error = 'Incorrect password. Please try again.';
+          $count_failure = true;
         } elseif ($user['status'] === 'pending') {
             $error = 'Your account is pending approval. Please wait for admin review.';
         } elseif ($user['status'] === 'rejected') {
@@ -113,6 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['user_role']  = $user['role'];
             $_SESSION['user_email'] = $email;
             $_SESSION['clinic_name'] = $user['clinic_name'] ?? '';
+          $login_success = true;
 
             // Redirect based on role
             if ($user['role'] === 'vet') {
@@ -124,11 +140,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+      if ($login_success) {
+        auth_rate_limit_register_attempt($conn, $rate_action, true);
+      } elseif ($count_failure) {
+        auth_rate_limit_register_attempt($conn, $rate_action, false);
+      }
+      }
+
     // Keep selected role after error
-    if (in_array($role, ['vet', 'owner'])) {
+    if (in_array($role, ['vet', 'owner'], true)) {
         $selected_role = $role;
     }
 }
+  }
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -173,6 +197,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <!-- Login Form -->
     <form method="POST" action="login.php">
+      <?= csrf_input() ?>
 
       <!-- Role Tabs — Vet and Owner only -->
       <p class="auth-label mb-2">Sign in as</p>

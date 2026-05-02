@@ -11,12 +11,24 @@ if (isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin') {
 }
 
 include '../config.php';
+require_once __DIR__ . '/../includes/security.php';
 
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  if (!validate_csrf_token($_POST['csrf_token'] ?? null)) {
+    $error = 'Invalid request. Please refresh and try again.';
+  } else {
     $email    = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
+  $rate_action = 'login_admin';
+  $rate_error = auth_rate_limit_check($conn, $rate_action);
+  $login_success = false;
+  $count_failure = false;
+
+  if ($rate_error !== '') {
+    $error = $rate_error;
+  } else {
 
     if (empty($email) || empty($password)) {
         $error = 'Please fill in all fields.';
@@ -31,8 +43,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (!$user) {
             $error = 'Invalid credentials.';
+          $count_failure = true;
         } elseif (!password_verify($password, $user['password'])) {
             $error = 'Invalid credentials.';
+          $count_failure = true;
         } elseif ($user['is_active'] == 0) {
             $error = 'Account deactivated.';
         } else {
@@ -40,10 +54,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['user_id']   = $user['id'];
             $_SESSION['user_name'] = $user['first_name'] . ' ' . $user['last_name'];
             $_SESSION['user_role'] = 'admin';
+          $login_success = true;
             header('Location: dashboard.php');
             exit();
         }
     }
+
+      if ($login_success) {
+        auth_rate_limit_register_attempt($conn, $rate_action, true);
+      } elseif ($count_failure) {
+        auth_rate_limit_register_attempt($conn, $rate_action, false);
+      }
+      }
+}
 }
 ?>
 <!DOCTYPE html>
@@ -90,6 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <!-- Admin Login Form -->
     <form method="POST" action="login.php">
+      <?= csrf_input() ?>
 
       <!-- Email -->
       <div class="mb-3">

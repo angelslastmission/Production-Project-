@@ -2,10 +2,15 @@
 session_start();
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../includes/security.php';
 
 $error = '';
 $success = '';
 $showForm = false;
+$reset_success = false;
+$rate_action = 'reset_vet';
+$rate_error = '';
+$csrf_valid = true;
 
 function is_strong_password(string $password): bool {
     return (bool)preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d])(?=\S+$).{8,}$/', $password);
@@ -74,7 +79,19 @@ if ($error === '' && $token !== '' && $email !== '') {
     $error = 'Missing reset link data.';
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $showForm && $resetRow) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  $csrf_valid = validate_csrf_token($_POST['csrf_token'] ?? null);
+  if (!$csrf_valid) {
+    $error = 'Invalid request. Please refresh and try again.';
+  } else {
+    $rate_error = auth_rate_limit_check($conn, $rate_action);
+    if ($rate_error !== '') {
+      $error = $rate_error;
+    }
+  }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $showForm && $resetRow && $rate_error === '' && $csrf_valid) {
     $new_password = (string)($_POST['new_password'] ?? '');
     $confirm_password = (string)($_POST['confirm_password'] ?? '');
 
@@ -112,6 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $showForm && $resetRow) {
 
                         $success = 'Password reset successfully. You can now log in with your new password.';
                         $showForm = false;
+                        $reset_success = true;
                     } else {
                         $error = 'Unable to update password.';
                     }
@@ -125,6 +143,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $showForm && $resetRow) {
         }
     }
 }
+
+  if ($_SERVER['REQUEST_METHOD'] === 'POST' && $rate_error === '' && $csrf_valid) {
+    auth_rate_limit_register_attempt($conn, $rate_action, $reset_success);
+  }
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -175,6 +197,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $showForm && $resetRow) {
 
       <?php if ($showForm): ?>
       <form method="POST" id="resetPasswordForm">
+        <?= csrf_input() ?>
         <input type="hidden" name="token" value="<?= htmlspecialchars($token) ?>">
         <input type="hidden" name="email" value="<?= htmlspecialchars($email) ?>">
 
