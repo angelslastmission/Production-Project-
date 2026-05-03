@@ -413,14 +413,7 @@ if ($logCountResult) {
                 <h1 class="admin-page-title">Send email reminders</h1>
                 <p class="admin-page-sub">Runs 7-day, 3-day, 1-day, due-date and overdue reminder emails.</p>
             </div>
-            <div>
-                <form method="POST" class="d-inline">
-                    <input type="hidden" name="action" value="run_sender" />
-                    <button type="submit" class="btn btn-dark">
-                        <i class="bi bi-send-fill me-1"></i> Run email sender
-                    </button>
-                </form>
-            </div>
+        
         </div>
 
         <div class="admin-card mb-3">
@@ -487,6 +480,12 @@ if ($logCountResult) {
             <div class="mt-3">
                 <a href="reminder_logs.php" class="btn btn-outline-dark me-2">Back to reminder monitor</a>
                 <a href="email_reminder_logs.php" class="btn btn-dark">View email logs</a>
+                 <form method="POST" class="d-inline">
+                    <input type="hidden" name="action" value="run_sender" />
+                    <button type="submit" class="btn btn-dark">
+                        <i class="bi bi-send-fill me-1"></i> Run email sender
+                    </button>
+                </form>
             </div>
         </div>
     </div>

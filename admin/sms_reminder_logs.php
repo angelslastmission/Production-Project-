@@ -92,7 +92,6 @@ function sms_event_label($key) {
                 <h1 class="admin-page-title">SMS reminder logs</h1>
                 <p class="admin-page-sub"><?= safe_text($filter_label) ?></p>
             </div>
-            <div><a href="send_sms_reminders.php" class="btn btn-dark"><i class="bi bi-phone-vibrate me-1"></i> Run SMS sender</a></div>
         </div>
 
         <div class="admin-card mb-3">

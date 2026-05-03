@@ -4,7 +4,7 @@
     <!-- Logo -->
     <div class="sidebar-logo">
         <span>🐾</span>
-        <span>PetCura</span>
+        <span>PetCura <span>HMS</span></span>
     </div>
 
     <!-- Navigation -->

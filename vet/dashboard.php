@@ -218,9 +218,7 @@ if ($hour >= 5 && $hour < 12) {
     <?php include 'includes/sidebar.php'; ?>
 
     <main class="vet-main">
-        <div class="vet-search-row">
-            <input type="text" class="vet-search" placeholder="Search patients or records..."/>
-        </div>
+       
 
         <section class="vet-greeting">
             <h1><?= htmlspecialchars($greeting) ?>, <?= htmlspecialchars($_SESSION['user_name'] ?? 'Vet') ?></h1>

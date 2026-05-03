@@ -306,14 +306,7 @@ while ($countResult && $row = mysqli_fetch_assoc($countResult)) {
                 <h1 class="admin-page-title">Send SMS reminders</h1>
                 <p class="admin-page-sub">Runs SMS reminders using the same due-date rules as email reminders. Safety limit: 5 SMS attempts per run with 2 seconds gap between attempts.</p>
             </div>
-            <div>
-                <form method="POST" class="d-inline">
-                    <input type="hidden" name="action" value="run_sender" />
-                    <button type="submit" class="btn btn-dark">
-                        <i class="bi bi-phone-fill me-1"></i> Run SMS sender
-                    </button>
-                </form>
-            </div>
+        
         </div>
 
         <div class="admin-card mb-3">
@@ -339,6 +332,14 @@ while ($countResult && $row = mysqli_fetch_assoc($countResult)) {
             <div class="mt-3">
                 <a href="reminder_logs.php" class="btn btn-outline-dark me-2">Back to reminder monitor</a>
                 <a href="sms_reminder_logs.php" class="btn btn-dark">View SMS logs</a>
+            
+                <form method="POST" class="d-inline">
+                    <input type="hidden" name="action" value="run_sender" />
+                    <button type="submit" class="btn btn-dark">
+                        <i class="bi bi-phone-fill me-1"></i> Run SMS sender
+                    </button>
+                </form>
+        
             </div>
         </div>
     </div>

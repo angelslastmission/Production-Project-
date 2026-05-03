@@ -117,11 +117,7 @@ function event_label($key) {
                 <h1 class="admin-page-title">Email reminder logs</h1>
                 <p class="admin-page-sub"><?= safe_text($filter_label) ?></p>
             </div>
-            <div>
-                <a href="send_reminder_emails.php" class="btn btn-dark">
-                    <i class="bi bi-send-fill me-1"></i> Run email sender
-                </a>
-            </div>
+            
         </div>
 
         <div class="admin-card mb-3">

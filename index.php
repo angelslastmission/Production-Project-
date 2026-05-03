@@ -14,21 +14,26 @@ include 'includes/header.php';
         <div class="hero-badge mb-4">
           <span>🐾 Pet Health Management System</span>
         </div>
+
         <h1 class="hero-title">
           Your pet deserves<br>
           <span class="accent">proactive care.</span>
         </h1>
+
         <p class="hero-sub mt-4">
-          A modern clinical system for vets and pet owners —
-          track vaccinations, deworming, treatments and get
-          automated reminders before it's too late.
+          A smart pet healthcare system designed for veterinarians and pet owners.
+          Manage vaccinations, deworming, and treatment follow-ups — all in one place.
+          Stay ahead with automated reminders, complete health history, and real-time tracking
+          to ensure pets never miss essential care.
         </p>
+
         <div class="d-flex flex-wrap gap-3 mt-5">
           <a href="register.php" class="btn btn-hero-primary">Get Started &rarr;</a>
-          <a href="login.php"    class="btn btn-hero-ghost">Sign In</a>
+          <a href="login.php" class="btn btn-hero-ghost">Sign In</a>
         </div>
+
         <div class="hero-stats-row mt-5 d-flex gap-4 flex-wrap">
-          <?php foreach([["112+","Pets tracked"],["8","Vets"],["200+","Reminders sent"]] as $q): ?>
+          <?php foreach([["50+","Pets Tracked"],["20+","Veterinarians"],["200+","Reminders Sent"]] as $q): ?>
           <div class="hero-stat-item">
             <div class="hero-stat-val"><?= $q[0] ?></div>
             <div class="hero-stat-lbl"><?= $q[1] ?></div>
@@ -37,7 +42,6 @@ include 'includes/header.php';
         </div>
       </div>
 
-      <!-- RIGHT: real vet image -->
       <div class="col-lg-7 col-12 hero-right d-flex justify-content-center mt-5 mt-lg-0">
         <div class="hero-img-wrap">
           <img
@@ -71,16 +75,18 @@ include 'includes/header.php';
       <p class="section-label">What PetCura offers</p>
       <h2 class="section-title">Everything you need to<br>keep pets healthy</h2>
     </div>
+
     <div class="row g-4">
       <?php
       $features = [
-        ["bi-shield-plus",        "teal",   "Vaccination Tracking",   "Log every dose with batch number, date given, and next due date. Full history per pet, always accessible."],
-        ["bi-bell-fill",          "blue",   "Auto Email Reminders",   "Automated email alerts sent 7, 3, and 1 day before due date — plus overdue warnings directly to owners."],
-        ["bi-people-fill",        "purple", "3 Role Portals",         "Separate dashboards for Admin, Veterinarian, and Pet Owner — each with role-specific access and views."],
-        ["bi-droplet-fill",       "green",  "Deworming Schedule",     "Track deworming alongside vaccinations in one unified view. Never miss a scheduled dose again."],
-        ["bi-file-earmark-pulse", "amber",  "Full Health Records",    "Complete pet profiles — vaccinations, deworming, treatments, allergies, weight, and visit history."],
-        ["bi-graph-up-arrow",     "red",    "Reminder Logs",          "Every email logged. Admin can monitor delivery status, view failure reasons, and filter by type."],
+        ["bi-shield-plus", "teal", "Vaccination Tracking", "Log every vaccine dose with batch number, date given, and next due date. Full vaccination history remains accessible for each pet."],
+        ["bi-bell-fill", "blue", "Auto Email Reminders", "Automated email alerts are sent before due dates and for overdue records, helping owners take action on time."],
+        ["bi-people-fill", "purple", "2 User Portals", "Dedicated dashboards for Veterinarians and Pet Owners with personalized access, records, and reminders."],
+        ["bi-droplet-fill", "green", "Deworming Schedule", "Track deworming schedules alongside vaccinations in one unified view so scheduled care is easier to manage."],
+        ["bi-file-earmark-pulse", "amber", "Full Health Records", "Complete pet health profiles including vaccinations, deworming, treatments, allergies, weight tracking, and visit history — all in one place."],
+        ["bi-graph-up-arrow", "red", "Reminder Logs", "Every reminder is logged so delivery status, sent history, and failed attempts can be reviewed easily."],
       ];
+
       foreach($features as $f): ?>
       <div class="col-lg-4 col-md-6">
         <div class="feat-card h-100">
@@ -100,17 +106,20 @@ include 'includes/header.php';
     <div class="text-center mb-5">
       <p class="section-label">Simple Process</p>
       <h2 class="section-title">How PetCura HMS works</h2>
-      <p class="section-sub mt-2">From registration to automatic reminders in 4 steps.</p>
+      <p class="section-sub mt-2">From vet registration to automatic reminders in 4 simple steps.</p>
     </div>
+
     <div class="row g-4 position-relative">
       <div class="step-line d-none d-lg-block"></div>
+
       <?php
       $steps = [
-        ["01","bi-hospital-fill",    "Admin Sets Up",        "Admin creates the clinic, registers vets and assigns them to their location."],
-        ["02","bi-plus-circle-fill", "Vet Registers Pet",    "Vet adds pet details, breed, allergies and links the pet to the owner account."],
-        ["03","bi-shield-plus",      "Records Vaccinations", "Every vaccine dose is logged with next due date. Auto-reminder is enabled."],
-        ["04","bi-bell-fill",        "Owner Gets Reminded",  "System runs daily. Email keeps owners notified before and after due dates."],
+        ["01","bi-person-plus-fill", "Vet Registers", "Veterinarian creates an account and submits details for verification."],
+        ["02","bi-shield-check", "Admin Verification", "Admin verifies the veterinarian account before granting system access."],
+        ["03","bi-plus-circle-fill", "Add Pet & Records", "Vet registers pets and adds vaccination, deworming, and treatment follow-up records."],
+        ["04","bi-bell-fill", "Owner Gets Reminded", "System sends reminders to pet owners before due dates and alerts them for overdue care."],
       ];
+
       foreach($steps as $s): ?>
       <div class="col-lg-3 col-md-6 text-center">
         <div class="step-circle"><?= $s[0] ?></div>
@@ -126,8 +135,8 @@ include 'includes/header.php';
 <!-- ═══ STATS ═══ -->
 <section class="section-dark-teal">
   <div class="container">
-    <div class="row text-center g-4">
-      <?php foreach([["112+","Pets Tracked"],["200+","Reminders Sent"],["8","Veterinarians"],["3","Clinics"]] as $s): ?>
+    <div class="row text-center g-4 justify-content-center">
+      <?php foreach([["50+","Pets Tracked"],["20+","Veterinarians"],["200+","Reminders Sent"]] as $s): ?>
       <div class="col-6 col-md-3">
         <div class="stat-number"><?= $s[0] ?></div>
         <div class="stat-text"><?= $s[1] ?></div>
@@ -141,22 +150,22 @@ include 'includes/header.php';
 <section class="section-portals" id="about">
   <div class="container">
     <div class="text-center mb-5">
-      <p class="section-label">Three Portals. One System.</p>
+      <p class="section-label">Two Portals. One System.</p>
       <h2 class="section-title">Built for everyone<br>in your pet's care journey</h2>
     </div>
-    <div class="row g-4">
+
+    <div class="row g-4 justify-content-center">
       <?php
       $portals = [
-        ["🏥","portal-admin","Admin","Admin / Clinic",
-         "Full system control. Manage all clinics, vets, and owners from one powerful dashboard.",
-         ["Manage vets & clinics","View all pet owners","System-wide reminder logs","Monitor all activity"]],
         ["👨‍⚕️","portal-vet","Vet","Veterinarian",
-         "Manage your patients, record vaccinations, treatments and send automated reminders to owners.",
-         ["Register & manage pets","Record vaccinations & treatments","Auto email reminders","Overdue vaccine alerts"]],
+         "Manage patients, record vaccinations, deworming, treatments, and keep owners updated through reminders.",
+         ["Register & manage pets","Record vaccinations & treatments","Track follow-up dates","Overdue care alerts"]],
+
         ["🐾","portal-owner","Owner","Pet Owner",
-         "Stay informed about your pet's health. View records, get reminders, and track upcoming care.",
-         ["View pet health records","Receive email alerts","See upcoming vaccinations","Track follow-up dates"]],
+         "Stay informed about your pet's health with records, reminders, and upcoming care tracking.",
+         ["View pet health records","Receive reminders","Track vaccinations","Monitor follow-ups"]],
       ];
+
       foreach($portals as $p): ?>
       <div class="col-lg-4 col-md-6">
         <div class="portal-card-v2 h-100 <?= $p[1] ?>">
@@ -183,16 +192,20 @@ include 'includes/header.php';
       <p class="section-label">What Users Say</p>
       <h2 class="section-title">Trusted by vets and pet owners</h2>
     </div>
+
     <div class="row g-4 justify-content-center">
       <?php
       $testimonials = [
-        ["The reminder system is a lifesaver. I used to forget which vaccine my dog needed next — now I get an email automatically before every due date.",
-         "Ram Sharma","Pet Owner · Labrador","R","#0d9488"],
-        ["Managing 24 patients used to be stressful. PetCura HMS keeps everything organized — overdue alerts, vaccination history, owner contacts all in one place.",
-         "Dr. Sunita Rai","Veterinarian · Animal Care Clinic","S","#7c3aed"],
-        ["I love seeing my pet's full health history in one place. The deworming reminders are incredibly helpful for a busy pet owner like me.",
-         "Priya Adhikari","Pet Owner · Golden Retriever","P","#0891b2"],
+        ["The reminder system is a lifesaver. I never miss my pet's vaccination anymore, and everything feels easier to manage.",
+         "Sisham Maharjan","Pet Owner · Labrador","S","#0d9488"],
+
+        ["Managing multiple patients is now easier with organized records, follow-up tracking, and automated reminder logs.",
+         "Dr. Peter Maharjan","Veterinarian · Pet Care Clinic","P","#7c3aed"],
+
+        ["I love how everything is tracked in one place. The deworming and vaccination reminders save so much time.",
+         "Khusi Gupta","Pet Owner · Golden Retriever","K","#0891b2"],
       ];
+
       foreach($testimonials as $t): ?>
       <div class="col-lg-4 col-md-6">
         <div class="testi-card-v2 h-100">
@@ -201,7 +214,7 @@ include 'includes/header.php';
           </div>
           <p class="testi-text-v2">"<?= $t[0] ?>"</p>
           <div class="testi-author-v2 mt-4">
-            <div class="testi-av" style="background:<?= $t[4] ?>"><?= $t[2][0] ?></div>
+            <div class="testi-av" style="background:<?= $t[4] ?>"><?= $t[3] ?></div>
             <div>
               <div class="testi-name-v2"><?= $t[1] ?></div>
               <div class="testi-role-v2"><?= $t[2] ?></div>
@@ -221,11 +234,11 @@ include 'includes/header.php';
       <div class="cta-paw">🐾</div>
       <h2 class="cta-title mt-3">Ready to keep your pet healthy?</h2>
       <p class="cta-sub mt-3">
-        Join pet owners and vets already using PetCura HMS to stay on top of preventive care.
+        Join pet owners and veterinarians using PetCura HMS to manage records, follow-ups, and preventive care reminders.
       </p>
       <div class="d-flex gap-3 justify-content-center flex-wrap mt-5">
         <a href="register.php" class="btn btn-cta-solid">Register Now &rarr;</a>
-        <a href="contact.php"  class="btn btn-cta-outline">Contact Us</a>
+        <a href="contact.php" class="btn btn-cta-outline">Contact Us</a>
       </div>
     </div>
   </div>

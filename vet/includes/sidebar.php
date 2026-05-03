@@ -2,7 +2,7 @@
     <div class="vet-brand">
         <div class="vet-brand-logo">
             <span class="vet-brand-paw">🐾</span>
-            <span class="vet-brand-title">PetCura</span>
+            <span class="vet-brand-title">PetCura <span>HMS</span></span>
         </div>
     </div>
 

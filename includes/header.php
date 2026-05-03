@@ -32,8 +32,7 @@
     <div class="collapse navbar-collapse" id="mainNav">
       <ul class="navbar-nav mx-auto gap-1">
         <li class="nav-item">
-          <a class="nav-link <?= (isset($active_page) && $active_page == 'home') ? 'active' : '' ?>"
-             href="index.php">Home</a>
+          <a class="nav-link" href="index.php">Home</a>
         </li>
         <li class="nav-item">
           <a class="nav-link" href="index.php#features">Features</a>
@@ -58,22 +57,47 @@
 </nav>
 
 <script>
-// Scroll detection — only active on home page (nav-hero)
-(function() {
+(function () {
   var nav = document.getElementById('mainNavbar');
-  if (!nav || !nav.classList.contains('nav-hero')) return;
+  var links = document.querySelectorAll('.navbar-nav .nav-link');
+  var isHome = nav && nav.classList.contains('nav-hero');
 
-  var heroHeight = window.innerHeight * 0.6;
-
-  function onScroll() {
-    if (window.scrollY > heroHeight) {
-      nav.classList.add('nav-scrolled');
-    } else {
-      nav.classList.remove('nav-scrolled');
-    }
+  function clearActive() {
+    links.forEach(function (link) {
+      link.classList.remove('active');
+    });
   }
 
-  window.addEventListener('scroll', onScroll, { passive: true });
-  onScroll(); // run once on load
+  function setActiveByHash() {
+    if (!isHome) return;
+
+    clearActive();
+
+    var hash = window.location.hash;
+    var selector = hash
+      ? '.navbar-nav .nav-link[href="index.php' + hash + '"]'
+      : '.navbar-nav .nav-link[href="index.php"]';
+
+    var activeLink = document.querySelector(selector);
+    if (activeLink) activeLink.classList.add('active');
+  }
+
+  if (isHome) {
+    var heroHeight = window.innerHeight * 0.6;
+
+    function onScroll() {
+      if (window.scrollY > heroHeight) {
+        nav.classList.add('nav-scrolled');
+      } else {
+        nav.classList.remove('nav-scrolled');
+      }
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('hashchange', setActiveByHash);
+
+    onScroll();
+    setActiveByHash();
+  }
 })();
 </script>

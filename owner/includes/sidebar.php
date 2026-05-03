@@ -3,9 +3,9 @@ $active_page = $active_page ?? 'dashboard';
 ?>
 <aside class="owner-sidebar">
     <div class="owner-logo">
-        <span class="owner-logo-paw">🐾</span>
-        <span class="owner-logo-title">PetCura</span>
-    </div>
+    <span class="owner-logo-paw">🐾</span>
+    <span class="owner-logo-title">PetCura <span>HMS</span></span>
+</div>
 
     <nav class="owner-nav">
         <a href="dashboard.php" class="owner-nav-link <?= ($active_page === 'dashboard') ? 'active' : '' ?>">

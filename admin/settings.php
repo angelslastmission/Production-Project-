@@ -357,7 +357,7 @@ if ($admin_full_name === '') {
                         <div class="settings-switch-row settings-row-gap">
                             <div>
                                 <p class="settings-switch-title mb-0">Enable email reminders</p>
-                                <small class="text-muted">Use SMTP mail delivery (free via Gmail SMTP possible)</small>
+                                <small class="text-muted">Sends reminder emails to pet owners</small>
                             </div>
                             <div class="form-check form-switch mb-0">
                                 <input class="form-check-input" type="checkbox" id="email_reminders" name="email_reminders" <?= $preferences['email_reminders'] ? 'checked' : '' ?>>
@@ -366,7 +366,7 @@ if ($admin_full_name === '') {
                         <div class="settings-switch-row settings-row-gap">
                             <div>
                                 <p class="settings-switch-title mb-0">Enable SMS reminders</p>
-                                <small class="text-muted">Requires external SMS provider API (usually paid)</small>
+                                <small class="text-muted">Sends SMS reminders from the SMS sender page</small>
                             </div>
                             <div class="form-check form-switch mb-0">
                                 <input class="form-check-input" type="checkbox" id="sms_reminders" name="sms_reminders" <?= $preferences['sms_reminders'] ? 'checked' : '' ?>>
@@ -375,7 +375,7 @@ if ($admin_full_name === '') {
                         <div class="settings-switch-row settings-row-gap">
                             <div>
                                 <p class="settings-switch-title mb-0">Enable auto reminder scheduler</p>
-                                <small class="text-muted">Runs every morning at 9:00 AM</small>
+                                <small class="text-muted">Allows automatic reminder processing</small>
                             </div>
                             <div class="form-check form-switch mb-0">
                                 <input class="form-check-input" type="checkbox" id="auto_scheduler" name="auto_scheduler" <?= $preferences['auto_scheduler'] ? 'checked' : '' ?>>
@@ -443,7 +443,7 @@ if ($admin_full_name === '') {
             <div class="col-lg-6">
                 <div class="admin-alert-warning h-100 mb-0 settings-note">
                     <i class="bi bi-info-circle-fill me-2"></i>
-                    These settings are saved in database. Actual SMS/email sending provider integration is the next step.
+                    These settings are saved in database. Email reminders follow these preferences. SMS reminders are managed from the SMS sender page.
                 </div>
             </div>
 
