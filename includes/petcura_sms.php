@@ -2,8 +2,17 @@
 
 function send_sms_template($phone, array $variables) {
 
-    $api_key = 'nsms_live_f78b8a9d27fb97f2becc172897e808acf094481dfc6c3e8dfed2b8ea85d5361c';
-    $template_id = 'caf46676-92d7-48d6-aaf2-0c8b73392e70';
+    $local_config = [];
+    $local_config_path = __DIR__ . '/../config.local.php';
+    if (is_file($local_config_path)) {
+        $loaded = require $local_config_path;
+        if (is_array($loaded)) {
+            $local_config = $loaded;
+        }
+    }
+
+    $api_key = $local_config['NESTSMS_API_KEY'] ?? 'nsms_live_f78b8a9d27fb97f2becc172897e808acf094481dfc6c3e8dfed2b8ea85d5361c';
+    $template_id = $local_config['NESTSMS_TEMPLATE_ID'] ?? 'caf46676-92d7-48d6-aaf2-0c8b73392e70';
 
     $url = 'https://auth.nestsms.com/api/v1/sms/send';
 
